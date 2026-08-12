@@ -1,0 +1,68 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "**" }]
+    },
+    "dialog:default",
+    "fs:default",
+    "fs:allow-app-meta-recursive",
+    "fs:allow-app-write-recursive",
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        { "path": "$RESOURCE/skills" },
+        { "path": "$RESOURCE/skills/**" },
+        { "path": "$RESOURCE/../../skills" },
+        { "path": "$RESOURCE/../../skills/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        { "path": "$RESOURCE/skills/**" },
+        { "path": "$RESOURCE/../../skills/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        { "path": "$RESOURCE/skills" },
+        { "path": "$RESOURCE/skills/**" },
+        { "path": "$RESOURCE/../../skills" },
+        { "path": "$RESOURCE/../../skills/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        { "path": "$RESOURCE/skills" },
+        { "path": "$RESOURCE/skills/**" },
+        { "path": "$RESOURCE/../../skills" },
+        { "path": "$RESOURCE/../../skills/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        { "path": "$RESOURCE/skills" },
+        { "path": "$RESOURCE/skills/**" },
+        { "path": "$RESOURCE/../../skills" },
+        { "path": "$RESOURCE/../../skills/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        { "path": "$RESOURCE/skills/**" },
+        { "path": "$RESOURCE/../../skills/**" }
+      ]
+    }
+  ]
+}
