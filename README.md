@@ -1,7 +1,107 @@
-# Tauri + Vue + TypeScript
+# 🌿 Nahida-nana 工具箱
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+> 一个「用户可编程的本地工具箱平台」—— 想要什么功能就装什么，想怎么改就怎么改，改不了就自己写一个装进去。
 
-## Recommended IDE Setup
+**v0.1 · 正在生长中** 🌱
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+---
+
+## ✨ 这是什么
+
+大多数工具箱要么功能单一，要么大而全却臃肿，要么封闭得没法自定义。
+这个工具箱的答案是：**内核极简稳定，所有功能都是插件，你完全掌控。**
+
+设计灵魂是纳西妲（草神）——智慧、草木、纯真、梦境。
+它不只是一个工具集合，更是一个愿意让你打开、探索、停留的数字小花园。
+
+**核心理念**：超轻量 · 高性能 · 高拓展 · 低门槛自定义 · 本地优先 · 有趣驱动
+
+## 🎁 功能一览
+
+### 💭 虚空终端 —— AI 统一入口
+
+| 能力 | 说明 |
+|------|------|
+| 智慧对谈 | OpenAI 兼容 SSE 流式对话，支持中止 / 重试 / 多对话管理 |
+| Skills 技能系统 | 渐进式披露：元数据索引常驻 → 完整指令按需加载 → 资源按需读取 |
+| 纳西妲人格 | 内置常驻人格技能（`nahida-persona`），对话自带草木与智慧的气息 |
+| 多模态附件 | 图片直接对话，docx / pdf 自动提取文本 |
+| Token 追踪 | 请求 / 响应统计 + 结构化诊断面板 |
+
+> 用户自备 API Key，隐私与费用都在你自己手里。
+
+### 📦 四大模块
+
+- **📁 项目展柜** —— 展示你自己的作品：GitHub 自动拉取 + 手动录入，按类型筛选
+- **💡 兴趣收藏** —— 书签管理器模式，收藏有趣的东西，只存标题与链接
+- **🎮 游戏小馆** —— 2048 小游戏（含存档与最高分），更多游戏生长中
+- **🔧 工具工坊** —— 文件格式转换：md / txt / html / docx / pdf 五格式全互转（20 条转换路径，Rust 并发引擎）
+
+### 🏠 固定骨架
+
+- **控制台** —— 欢迎语 + 动态时间线 + 模块一览（模块级显隐开关）
+- **设置中心** —— API 配置 + 插件管理（插件级开关）+ Skills 目录管理
+- **系统状态** —— CPU / 内存 / GPU / 显存实时监控，启动即预采集，零等待
+
+## 🛠️ 技术栈
+
+| 层面 | 选型 |
+|------|------|
+| 桌面框架 | [Tauri v2](https://tauri.app)（Rust 后端，安装包仅 ~3-5 MB） |
+| 前端 | Vue 3 + TypeScript + Vite |
+| UI 组件库 | Naive UI |
+| 包管理 | pnpm workspace（desktop / ui / shared / web 四包） |
+| AI | OpenAI 兼容协议（云端），本地推理规划中 |
+
+文件转换双通道：不含 PDF 的路径由 Rust 原生处理（线程池并发 + 崩溃隔离），含 PDF 走 Python 桥接（PyMuPDF / WeasyPrint / reportlab）。
+
+## 🚀 快速开始
+
+**环境准备**：Node.js ≥ 18 · Rust ≥ 1.70 · pnpm · Windows 需 VS Build Tools
+
+```bash
+# 安装依赖
+pnpm install
+
+# 开发模式（热更新）
+pnpm dev:desktop
+
+# 构筑安装包（产物在 packages/desktop/src-tauri/target/release/bundle/）
+pnpm --filter @nahida-nana/desktop exec -- tauri build
+```
+
+> 📎 小提示：PDF 相关转换需要本机 Python 环境（PyMuPDF / reportlab 等），首次使用时按提示安装即可。
+
+## 🗂️ 项目结构
+
+```
+├── packages/
+│   ├── desktop/          # Tauri 桌面应用（主力产品）
+│   │   ├── src/          # Vue 3 前端（views / services / stores / plugins）
+│   │   └── src-tauri/    # Rust 后端 + skills 源目录
+│   ├── shared/           # 共享 TypeScript 类型与工具
+│   ├── ui/               # 共享 UI 组件库（基于 naive-ui）
+│   └── web/              # 网页版（暂停开发，待桌面端稳定后重启）
+├── CHANGELOG.md          # 版本更新日志
+└── README.md             # 本文件
+```
+
+**三层操作设计**：普通用户开箱即用 → 进阶用户高级设置可调 → 极客直接改源码。代码是用户二次创作的素材：每个文件短小精悍、职责单一、一眼看懂。
+
+## 🗺️ 路线图
+
+| 版本 | 定位 | 状态 |
+|------|------|------|
+| **v0.1** | 预览版：骨架 + 四大模块 + 云端 AI + Skills + 文件转换 | ✅ 当前版本 |
+| v0.2 | 本地 AI：模型下载管理 + 离线对话 | ⬜ 规划中 |
+| v1.0 | 正式版：插件 SDK + 安装时可选组件 | ⬜ 远期 |
+
+## 🙋 关于开发者
+
+一个喜欢折腾的开发者，相信「有趣」是最好的驱动力 🌱
+
+GitHub: [@Knot-chord](https://github.com/Knot-chord)
+
+---
+
+*今天的工具箱也好好地成长着呢。*
