@@ -1,20 +1,30 @@
 # 🌿 Nahida-nana 工具箱
 
+![平台](https://img.shields.io/badge/平台-Windows%2010%2B-blue?style=flat-square)
+![体积](https://img.shields.io/badge/安装包-~3%20MB-green?style=flat-square)
+![技术栈](https://img.shields.io/badge/Tauri%20v2-Vue%203-orange?style=flat-square)
+<!-- 首次发布 Release 后启用以下两枚动态徽章：
+[![Release](https://img.shields.io/github/v/release/Knot-chord/nahida-nana-toolkit?style=flat-square)](https://github.com/Knot-chord/nahida-nana-toolkit/releases/latest)
+[![下载量](https://img.shields.io/github/downloads/Knot-chord/nahida-nana-toolkit/total?style=flat-square)](https://github.com/Knot-chord/nahida-nana-toolkit/releases)
+-->
+
 > 一个「用户可编程的本地工具箱平台」—— 想要什么功能就装什么，想怎么改就怎么改，改不了就自己写一个装进去。
 
-**当前版本 v0.1（预览版）· 正在生长中** 🌱　|　平台：Windows 10+ (x64)　|　体积：安装包仅 ~3 MB
+**当前版本 v0.1（预览版）· 正在生长中** 🌱
 
 ---
 
 ## 📖 目录
 
 - [这是什么](#-这是什么)
+- [截图](#-截图)
 - [下载与安装](#-下载与安装)
 - [三分钟上手](#-三分钟上手)
 - [功能详解](#-功能详解)
 - [开发者指南](#-开发者指南)
 - [常见问题](#-常见问题)
 - [路线图](#-路线图)
+- [致谢](#-致谢)
 - [关于](#-关于)
 
 ---
@@ -29,6 +39,13 @@
 
 **六大理念**：超轻量 · 高性能 · 高拓展 · 低门槛自定义 · 本地优先 · 有趣驱动
 
+### 为什么是它
+
+- 🪶 **轻量**：基于 Tauri（Rust），安装包仅 ~3 MB，比 Electron 应用小一个数量级
+- 🔒 **本地优先**：文件转换、收藏、游戏全部本地运行；AI 也直连你自己的 API，数据不出设备
+- 🤖 **AI 原生**：内置纳西妲人格的虚空终端，不只是套壳对话框，而是带技能系统的智慧入口
+- 🧩 **可编程**：功能即插件、插件即代码，三层操作设计让小白到极客都能上手
+
 ### 核心能力一览
 
 | | 能力 | 一句话说明 |
@@ -41,6 +58,20 @@
 | 📊 | 系统状态 | CPU / 内存 / GPU / 显存实时监控 |
 
 <!-- TODO: 发布后在此补充应用截图（控制台 / 虚空终端 / 文件转换各一张） -->
+
+---
+
+## 📸 截图
+
+> 🌱 截图将在首个公开版本后补充，敬请期待。
+
+---
+
+## 🧭 你应该看哪里
+
+- 👋 **第一次来**：先看 [下载与安装](#-下载与安装)，再花三分钟走一遍 [上手指南](#-三分钟上手)
+- 🛠️ **想参与开发**：直奔 [开发者指南](#-开发者指南)
+- ❓ **遇到了问题**：先查 [常见问题](#-常见问题)，再提 Issue
 
 ---
 
@@ -189,12 +220,31 @@ A：默认随应用分发；可在「设置 → Skills」中打开文件夹或�
 
 ---
 
+## 💖 致谢
+
+这个工具箱能长出来，离不开这些优秀的开源项目：
+
+- [Tauri](https://tauri.app) —— 让桌面应用轻若羽毛
+- [Vue](https://vuejs.org) · [Vite](https://vite.dev) —— 渐进式框架与闪电构建
+- [Naive UI](https://www.naiveui.com) —— 完全用 TypeScript 写成的组件库
+- [PyMuPDF](https://pymupdf.readthedocs.io) · [WeasyPrint](https://weasyprint.org) —— PDF 世界的瑞士军刀
+
+以及《原神》的纳西妲——她给了这个项目名字与灵魂 🌿
+
+---
+
 ## 🙋 关于
 
 一个喜欢折腾的开发者，相信「有趣」是最好的驱动力 🌱
 
 - 开发者：[@Knot-chord](https://github.com/Knot-chord)
 - 问题反馈：欢迎提 [Issue](https://github.com/Knot-chord/nahida-nana-toolkit/issues)
+
+---
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Knot-chord/nahida-nana-toolkit&type=Date)](https://star-history.com/#Knot-chord/nahida-nana-toolkit&Date)
 
 ---
 
