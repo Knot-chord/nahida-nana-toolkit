@@ -47,6 +47,7 @@
 ### 🐛 修复
 
 - AI 配置模型参数：加载净化 NaN/脏数据，maxTokens 非法输入收敛，模型自定义输入提供切回推荐列表路径
+- 子进程弹黑窗根治：GPU 使用率采样每 10s 拉起 PowerShell 弹窗，全部进程拉起统一加 CREATE_NO_WINDOW（GPU 采集 / Python 探测 / PDF 桥接）
 
 ### ⚠️ 已知限制
 
