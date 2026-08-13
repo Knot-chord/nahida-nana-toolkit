@@ -46,5 +46,8 @@ export default defineConfig(async () => ({
     },
     // 目标现代浏览器，减小 polyfill 体积
     target: 'es2021',
+    // 体积警告阈值：naive-ui 按需导入后约 510 kB，已独立分包且仅启动时加载一次；
+    // 桌面应用资源从本地磁盘读取，500 kB 默认阈值针对网络传输场景，此处不适用
+    chunkSizeWarningLimit: 800,
   },
 }));
