@@ -3,6 +3,7 @@
 ![平台](https://img.shields.io/badge/平台-Windows%2010%2B-blue?style=flat-square)
 ![体积](https://img.shields.io/badge/安装包-~3%20MB-green?style=flat-square)
 ![技术栈](https://img.shields.io/badge/Tauri%20v2-Vue%203-orange?style=flat-square)
+
 <!-- 首次发布 Release 后启用以下两枚动态徽章：
 [![Release](https://img.shields.io/github/v/release/Knot-chord/nahida-nana-toolkit?style=flat-square)](https://github.com/Knot-chord/nahida-nana-toolkit/releases/latest)
 [![下载量](https://img.shields.io/github/downloads/Knot-chord/nahida-nana-toolkit/total?style=flat-square)](https://github.com/Knot-chord/nahida-nana-toolkit/releases)
@@ -18,6 +19,7 @@
 
 - [这是什么](#-这是什么)
 - [截图](#-截图)
+- [你应该看哪里](#-你应该看哪里)
 - [下载与安装](#-下载与安装)
 - [三分钟上手](#-三分钟上手)
 - [功能详解](#-功能详解)
@@ -48,14 +50,14 @@
 
 ### 核心能力一览
 
-| | 能力 | 一句话说明 |
-|---|------|-----------|
-| 💭 | 虚空终端 | AI 统一入口：流式对谈 + Skills 技能系统 + 纳西妲人格 |
+|    | 能力         | 一句话说明                                             |
+| -- | ------------ | ------------------------------------------------------ |
+| 💭 | 虚空终端     | AI 统一入口：流式对谈 + Skills 技能系统 + 纳西妲人格   |
 | 🔧 | 文件格式转换 | md / txt / html / docx / pdf 五格式全互转（20 条路径） |
-| 📁 | 项目展柜 | 展示你自己的作品（GitHub 自动拉取 + 手动录入） |
-| 💡 | 兴趣收藏 | 书签管理器，收藏有趣的链接 |
-| 🎮 | 游戏小馆 | 2048 等小游戏，随玩随存 |
-| 📊 | 系统状态 | CPU / 内存 / GPU / 显存实时监控 |
+| 📁 | 项目展柜     | 展示你自己的作品（GitHub 自动拉取 + 手动录入）         |
+| 💡 | 兴趣收藏     | 书签管理器，收藏有趣的链接                             |
+| 🎮 | 游戏小馆     | 2048 等小游戏，随玩随存                                |
+| 📊 | 系统状态     | CPU / 内存 / GPU / 显存实时监控                        |
 
 <!-- TODO: 发布后在此补充应用截图（控制台 / 虚空终端 / 文件转换各一张） -->
 
@@ -135,12 +137,12 @@
 ### 🔧 文件格式转换 —— 20 条转换路径
 
 | 源格式 ↓ 目标 → | txt | html | md | docx | pdf |
-|---|---|---|---|---|---|
-| **md** | ✅ | ✅ | — | ✅ | ✅ |
-| **txt** | — | ✅ | ✅ | ✅ | ✅ |
-| **html** | ✅ | — | ✅ | ✅ | ✅ |
-| **docx** | ✅ | ✅ | ✅ | — | ✅ |
-| **pdf** | ✅ | ✅ | ✅ | ✅ | — |
+| ----------------- | --- | ---- | -- | ---- | --- |
+| **md**            | ✅  | ✅   | — | ✅   | ✅  |
+| **txt**           | —  | ✅   | ✅ | ✅   | ✅  |
+| **html**          | ✅  | —   | ✅ | ✅   | ✅  |
+| **docx**          | ✅  | ✅   | ✅ | —   | ✅  |
+| **pdf**           | ✅  | ✅   | ✅ | ✅   | —  |
 
 双通道架构：不含 PDF 的路径由 **Rust 原生**处理（线程池并发 + 崩溃隔离）；含 PDF 走 **Python 桥接**（PyMuPDF / WeasyPrint / reportlab）。
 
@@ -210,11 +212,11 @@ A：默认随应用分发；可在「设置 → Skills」中打开文件夹或�
 
 ## 🗺️ 路线图
 
-| 版本 | 定位 | 状态 |
-|------|------|------|
+| 版本     | 定位                                                  | 状态        |
+| -------- | ----------------------------------------------------- | ----------- |
 | **v0.1** | 预览版：骨架 + 四大模块 + 云端 AI + Skills + 文件转换 | ✅ 当前版本 |
-| v0.2 | 本地 AI：模型下载管理 + 离线对话 | ⬜ 规划中 |
-| v1.0 | 正式版：插件 SDK + 安装时可选组件 | ⬜ 远期 |
+| v0.2     | 本地 AI：模型下载管理 + 离线对话                      | ⬜ 规划中   |
+| v1.0     | 正式版：插件 SDK + 安装时可选组件                     | ⬜ 远期     |
 
 详细版本记录见 [CHANGELOG](CHANGELOG.md)。
 
@@ -242,10 +244,8 @@ A：默认随应用分发；可在「设置 → Skills」中打开文件夹或�
 
 ---
 
-## ⭐ Star History
+<div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Knot-chord/nahida-nana-toolkit&type=Date)](https://star-history.com/#Knot-chord/nahida-nana-toolkit&Date)
+**🌱 有趣是最好的驱动力——今天的工具箱也好好地成长着呢**
 
----
-
-*今天的工具箱也好好地成长着呢。*
+</div>
