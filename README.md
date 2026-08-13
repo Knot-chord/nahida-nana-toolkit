@@ -3,6 +3,7 @@
 ![平台](https://img.shields.io/badge/平台-Windows%2010%2B-blue?style=flat-square)
 ![体积](https://img.shields.io/badge/安装包-~3%20MB-green?style=flat-square)
 ![技术栈](https://img.shields.io/badge/Tauri%20v2-Vue%203-orange?style=flat-square)
+[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 <!-- 首次发布 Release 后启用以下两枚动态徽章：
 [![Release](https://img.shields.io/github/v/release/Knot-chord/nahida-nana-toolkit?style=flat-square)](https://github.com/Knot-chord/nahida-nana-toolkit/releases/latest)
@@ -185,6 +186,7 @@ pnpm --filter @nahida-nana/desktop exec -- tauri build   # 构筑安装包
 │   ├── ui/               # 共享 UI 组件库（基于 naive-ui）
 │   └── web/              # 网页版（暂停开发，待桌面端稳定后重启）
 ├── CHANGELOG.md          # 版本更新日志
+├── LICENSE               # MIT 协议
 └── README.md
 ```
 
@@ -241,6 +243,7 @@ A：默认随应用分发；可在「设置 → Skills」中打开文件夹或�
 
 - 开发者：[@Knot-chord](https://github.com/Knot-chord)
 - 问题反馈：欢迎提 [Issue](https://github.com/Knot-chord/nahida-nana-toolkit/issues)
+- 开源协议：[MIT](LICENSE) —— 自由使用、修改与分发
 
 ---
 
