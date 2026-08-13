@@ -10,7 +10,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { NResult, NButton, NCard, NSpace } from 'naive-ui'
+import { NResult, NCard, NSpace } from 'naive-ui'
 
 // 同步导入各模块视图：进入模块时内容与页面同帧呈现（单一过渡动画），
 // 避免异步 chunk 加载导致“页面先出、内容后出”的两段式观感；
@@ -72,10 +72,8 @@ const moduleInfo = computed(() => {
     <!-- 游戏小馆：具体游戏 -->
     <div v-else-if="moduleId === 'games' && gameId" class="game-detail">
       <div class="detail-header">
-        <NButton text size="small" @click="$router.push('/module/games')">
-          ← 返回游戏列表
-        </NButton>
         <span class="detail-name">{{ gameNames[gameId] ?? '未知游戏' }}</span>
+        <button class="back-btn" title="返回游戏列表" @click="$router.push('/module/games')">←</button>
       </div>
       <Game2048 v-if="gameId === 'game-2048'" />
       <NResult v-else status="info" title="游戏不存在" description="这个游戏还没开发哦~" />
@@ -107,10 +105,8 @@ const moduleInfo = computed(() => {
     <!-- 工具工坊：具体工具 -->
     <div v-else-if="moduleId === 'tools' && toolId" class="tool-detail">
       <div class="detail-header">
-        <NButton text size="small" @click="$router.push('/module/tools')">
-          ← 返回工具列表
-        </NButton>
         <span class="detail-name">{{ toolNames[toolId] ?? '未知工具' }}</span>
+        <button class="back-btn" title="返回工具列表" @click="$router.push('/module/tools')">←</button>
       </div>
       <FileConverter v-if="toolId === 'file-converter'" />
       <NResult v-else status="info" title="工具不存在" description="这个工具还没开发哦~" />
@@ -136,9 +132,31 @@ const moduleInfo = computed(() => {
 .detail-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  justify-content: space-between;
   /* 底部留白对齐全站 header 标准（与其他模块 margin-bottom: 1rem 一致） */
   padding: 0 2rem 1rem;
+}
+
+/* 返回按钮：纯图标、靠右上角，悬停淡底色反馈 */
+.back-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.back-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
 }
 
 /* 详情页标题与其他模块 page-title 同规格（1.25rem/600），
