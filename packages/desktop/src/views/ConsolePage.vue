@@ -72,6 +72,8 @@ function goToModule(moduleId: string) {
  */
 const feedItems: { type: 'success' | 'warning' | 'default'; title: string; content: string; date: string }[] = [
   // ── 已完成（完成时）──
+  { type: 'success', title: '【已完成】🌱 v0.1.1 首个公开预览版', content: '正式开源上线 GitHub（MIT 协议），小苗破土，去看看外面的世界', date: '08-13' },
+  { type: 'success', title: '【已完成】🎨 全站 UI 节奏统一', content: '布局留白、卡片圆角、标题层级全站同一标准，AI 配置模型参数可用性修复', date: '08-13' },
   { type: 'success', title: '【已完成】🎭 角色人格去内置化', content: '对话剥离全部纳西妲风格，人格经 Skills 常驻注入实现', date: '08-12' },
   { type: 'success', title: '【已完成】⚡ 性能全面优化', content: '监控启动即预采集、状态栏零等待、采集线程分离、模块平滑过渡', date: '08-12' },
   { type: 'success', title: '【已完成】📊 系统监控全量就位', content: 'CPU/内存/GPU 动态进度条，支持 Intel/AMD 显卡', date: '08-10' },
