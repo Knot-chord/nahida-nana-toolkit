@@ -51,19 +51,23 @@
 |    | 能力         | 一句话说明                                             |
 | -- | ------------ | ------------------------------------------------------ |
 | 💭 | 虚空终端     | AI 统一入口：流式对谈 + Skills 技能系统 + 纳西妲人格   |
-| 🔧 | 文件格式转换 | md / txt / html / docx / pdf 五格式全互转（20 条路径） |
+| 🔧 | 文件格式转换 | md / txt / html / docx / pdf 五格式全互转（20 条路径），文件夹批量导入 |
 | 📁 | 项目展柜     | 展示你自己的作品（GitHub 自动拉取 + 手动录入）         |
 | 💡 | 兴趣收藏     | 书签管理器，收藏有趣的链接                             |
 | 🎮 | 游戏小馆     | 2048 等小游戏，随玩随存                                |
 | 📊 | 系统状态     | CPU / 内存 / GPU / 显存实时监控                        |
 
-<!-- TODO: 发布后在此补充应用截图（控制台 / 虚空终端 / 文件转换各一张） -->
-
 ---
 
 ## 📸 截图
 
-> 🌱 截图将在首个公开版本后补充，敬请期待。
+<div align="center">
+
+| 控制台 | 虚空终端 | 文件格式转换 |
+| :---: | :---: | :---: |
+| ![控制台](screenshots/console.png) | ![虚空终端](screenshots/terminal.png) | ![文件格式转换](screenshots/converter.png) |
+
+</div>
 
 ---
 
@@ -111,8 +115,8 @@
 ### 第三步：试试文件转换
 
 1. 侧边栏进入 **🔧 工具工坊 → 文件格式转换**
-2. 拖入文件，选择目标格式，开始转换
-3. 多文件批量、大文件自动降级，全程本地处理
+2. 拖入文件或整个文件夹，选择目标格式，点「开始转换」
+3. 多文件并发批量、转换中可暂停/继续、大文件自动降级，全程本地处理
 
 ### 让工具箱长成你的样子
 
@@ -142,7 +146,13 @@
 | **docx**          | ✅  | ✅   | ✅ | —   | ✅  |
 | **pdf**           | ✅  | ✅   | ✅ | ✅   | —  |
 
-双通道架构：不含 PDF 的路径由 **Rust 原生**处理（线程池并发 + 崩溃隔离）；含 PDF 走 **Python 桥接**（PyMuPDF / WeasyPrint / reportlab）。
+双通道架构：不含 PDF 的路径由 **Rust 原生**处理（线程池并发 + 崩溃隔离）；含 PDF 走 **Python 桥接**（PyMuPDF / xhtml2pdf / reportlab）。
+
+- 📂 **文件夹批量导入**：拖入整个目录递归收集受支持文档，并发数按 CPU 核数自适应
+- ⏸ **转换中可暂停/继续**，同格式文件自动忽略不计入成败
+- 🌏 **编码自适应**：UTF-8 / GBK / GB2312 / UTF-16（带/不带 BOM）老文件直接转
+- 🛡 **失败必报原因**：扫描版 PDF 等无文字层文件明确提示，绝不产出空文件冒充成功
+- 📈 **资源守卫按设备自适应**：内存预算与超时随物理内存、核数、文件体积自动伸缩
 
 ### 📦 其余模块
 
@@ -199,7 +209,7 @@ Tauri v2（Rust）· Vue 3 · TypeScript · Vite · Naive UI · pnpm workspace �
 A：AI 走云端 API（用户自备 Key），工具箱不捆绑模型。本地离线 AI 在 v0.2 规划中。
 
 **Q：转换 PDF 时提示需要 Python？**
-A：PDF 相关转换通过 Python 桥接实现。安装 Python 3.10+ 后执行 `pip install pymupdf reportlab weasyprint pdf2docx pdfplumber python-docx`（完整清单见 `packages/desktop/src-tauri/resources/scripts/requirements.txt`），重启应用即可。其余格式转换完全不受影响。
+A：PDF 相关转换通过 Python 桥接实现。安装 Python 3.10+ 后执行 `pip install pymupdf pdfplumber pdf2docx xhtml2pdf reportlab python-docx markdown psutil`（完整清单见 `packages/desktop/src-tauri/resources/scripts/requirements.txt`），重启应用即可。其余格式转换完全不受影响。
 
 **Q：API Key 安全吗？**
 A：Key 仅存储在本地（应用数据目录），请求直连你配置的服务商，不经过任何第三方中转。
@@ -228,7 +238,7 @@ A：默认随应用分发；可在「设置 → Skills」中打开文件夹或�
 - [Tauri](https://tauri.app) —— 让桌面应用轻若羽毛
 - [Vue](https://vuejs.org) · [Vite](https://vite.dev) —— 渐进式框架与闪电构建
 - [Naive UI](https://www.naiveui.com) —— 完全用 TypeScript 写成的组件库
-- [PyMuPDF](https://pymupdf.readthedocs.io) · [WeasyPrint](https://weasyprint.org) —— PDF 世界的瑞士军刀
+- [PyMuPDF](https://pymupdf.readthedocs.io) · [xhtml2pdf](https://github.com/xhtml2pdf/xhtml2pdf) —— PDF 世界的瑞士军刀
 
 以及《原神》的纳西妲——她给了这个项目名字与灵魂 🌿
 
