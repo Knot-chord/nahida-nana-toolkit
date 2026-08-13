@@ -32,8 +32,9 @@ fn find_python() -> Result<&'static str, String> {
     match PYTHON_CMD.get_or_init(|| {
         let candidates = ["python", "python3", "py"];
         for cmd in &candidates {
-            if Command::new(cmd)
-                .arg("--version")
+            let mut probe = Command::new(cmd);
+            probe.arg("--version");
+            if crate::commands::hide_window(&mut probe)
                 .output()
                 .map(|o| o.status.success())
                 .unwrap_or(false)
@@ -88,14 +89,15 @@ pub fn call_pdf_python(operation: &str, src: &Path, dst: &Path) -> Result<u64, S
         operation
     };
 
-    // 启动子进程
-    let mut child = Command::new(python_cmd)
-        .arg(script_path.to_string_lossy().as_ref())
+    // 启动子进程（隐藏控制台窗口，避免转换时弹黑窗）
+    let mut cmd = Command::new(python_cmd);
+    cmd.arg(script_path.to_string_lossy().as_ref())
         .arg(actual_op)
         .arg(src.to_string_lossy().as_ref())
         .arg(dst.to_string_lossy().as_ref())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = crate::commands::hide_window(&mut cmd)
         .spawn()
         .map_err(|e| format!("启动 Python 失败: {}", e))?;
 

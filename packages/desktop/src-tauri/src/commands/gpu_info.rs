@@ -25,13 +25,13 @@ fn get_gpu_names_from_registry() -> Vec<String> {
     static CACHE: OnceLock<Vec<String>> = OnceLock::new();
 
     CACHE.get_or_init(|| {
-        let output = Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-Command",
-                "Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name"
-            ])
-            .output();
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-NoProfile",
+            "-Command",
+            "Get-CimInstance -ClassName Win32_VideoController | Select-Object -ExpandProperty Name"
+        ]);
+        let output = crate::commands::hide_window(&mut cmd).output();
 
         match output {
             Ok(out) => {
@@ -56,15 +56,15 @@ fn get_gpu_names_from_registry() -> Vec<String> {
 fn get_gpu_usage_counter() -> u32 {
     use std::process::Command;
     // 只统计 3D 引擎（engtype_3D）：全引擎平均会被大量空闲的 Copy/Video 引擎拉低到接近 0%
-    let output = Command::new("powershell")
-        .args(&[
-            "-NoProfile",
-            "-Command",
-            "$s = (Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -SampleInterval 1 -MaxSamples 1).CounterSamples | Where-Object { $_.InstanceName -like '*engtype_3D*' }; \
-             $v = ($s | Measure-Object -Property CookedValue -Sum).Sum; \
-             [math]::Round([math]::Min($v, 100))"
-        ])
-        .output();
+    let mut cmd = Command::new("powershell");
+    cmd.args(&[
+        "-NoProfile",
+        "-Command",
+        "$s = (Get-Counter '\\GPU Engine(*)\\Utilization Percentage' -SampleInterval 1 -MaxSamples 1).CounterSamples | Where-Object { $_.InstanceName -like '*engtype_3D*' }; \
+         $v = ($s | Measure-Object -Property CookedValue -Sum).Sum; \
+         [math]::Round([math]::Min($v, 100))"
+    ]);
+    let output = crate::commands::hide_window(&mut cmd).output();
 
     match output {
         Ok(out) => {
