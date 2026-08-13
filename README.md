@@ -4,11 +4,8 @@
 ![体积](https://img.shields.io/badge/安装包-~3%20MB-green?style=flat-square)
 ![技术栈](https://img.shields.io/badge/Tauri%20v2-Vue%203-orange?style=flat-square)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-
-<!-- 首次发布 Release 后启用以下两枚动态徽章：
 [![Release](https://img.shields.io/github/v/release/Knot-chord/nahida-nana-toolkit?style=flat-square)](https://github.com/Knot-chord/nahida-nana-toolkit/releases/latest)
 [![下载量](https://img.shields.io/github/downloads/Knot-chord/nahida-nana-toolkit/total?style=flat-square)](https://github.com/Knot-chord/nahida-nana-toolkit/releases)
--->
 
 > 一个「用户可编程的本地工具箱平台」—— 想要什么功能就装什么，想怎么改就怎么改，改不了就自己写一个装进去。
 
