@@ -6,8 +6,6 @@
 
 分类说明：✨ 新增（新功能）· 🚀 优化（现有功能改进）· 🗑️ 移除（删除的功能/依赖）· 🐛 修复（缺陷修复）· ⚠️ 已知限制
 
-## [未发布]
-
 ## [0.1.2] - 2026-08-13
 
 > 文件格式转换模块大修：目录批量导入、转换可暂停/继续、可靠性防线、资源守卫按设备自适应。
@@ -136,7 +134,6 @@
 - 全局 AI 检索、本地 AI（第 4 层）尚未实现
 - 自动更新暂未启用
 
-[未发布]: https://github.com/Knot-chord/nahida-nana-toolkit/compare/v0.1.2...HEAD
 [0.1.2]: https://github.com/Knot-chord/nahida-nana-toolkit/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Knot-chord/nahida-nana-toolkit/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Knot-chord/nahida-nana-toolkit/releases/tag/v0.1.0
