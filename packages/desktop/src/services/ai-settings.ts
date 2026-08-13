@@ -13,7 +13,12 @@ import type { AIProviderConfig } from '@nahida-nana/shared'
 
 const STORAGE_KEY = 'nahida-ai-config'
 
-/** 从 localStorage 加载配置，缺失字段用默认值填补 */
+/** 数值字段净化：非有限数（NaN/历史脏数据）回退默认值，避免配置页 toFixed 崩溃 */
+function numOr(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+}
+
+/** 从 localStorage 加载配置，缺失/非法字段用默认值填补 */
 function loadConfig(): AIProviderConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -23,9 +28,9 @@ function loadConfig(): AIProviderConfig {
       apiKey: parsed.apiKey ?? DEFAULT_AI_CONFIG.apiKey,
       baseUrl: parsed.baseUrl ?? DEFAULT_AI_CONFIG.baseUrl,
       model: parsed.model ?? DEFAULT_AI_CONFIG.model,
-      temperature: parsed.temperature ?? DEFAULT_AI_CONFIG.temperature,
-      maxTokens: parsed.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens,
-      topP: parsed.topP ?? DEFAULT_AI_CONFIG.topP,
+      temperature: numOr(parsed.temperature, DEFAULT_AI_CONFIG.temperature),
+      maxTokens: Math.max(0, Math.round(numOr(parsed.maxTokens, DEFAULT_AI_CONFIG.maxTokens))),
+      topP: numOr(parsed.topP, DEFAULT_AI_CONFIG.topP),
     }
   } catch {
     return { ...DEFAULT_AI_CONFIG }

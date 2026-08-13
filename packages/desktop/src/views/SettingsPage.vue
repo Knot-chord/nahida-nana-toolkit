@@ -11,6 +11,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { NMenu, NResult, NSwitch } from 'naive-ui'
 import { getPlugins, togglePlugin } from '../plugins/manager'
 import { getAIConfig, saveAIConfig, resetAIConfig, getTokenUsage, resetTokenUsage } from '../services/ai-settings'
+import { DEFAULT_AI_CONFIG } from '@nahida-nana/shared'
 import { API_PLATFORMS, matchPlatform, getPlatformModels, type BalanceResult } from '../services/api-platforms'
 import { checkBalance, formatBalance } from '../services/api-balance'
 import { useSettingsStore } from '../stores/settings'
@@ -81,11 +82,29 @@ function onBaseUrlChange() {
 function onModelSelect(value: string) {
   if (value === '__custom__') {
     isCustomModel.value = true
+  } else if (value === '__back__') {
+    // 从自定义输入回到平台推荐列表（默认选第一个）
+    isCustomModel.value = false
+    if (platformModels.value.length > 0) {
+      aiConfig.model = platformModels.value[0]
+      onFieldChange()
+    }
   } else {
     isCustomModel.value = false
     aiConfig.model = value
     onFieldChange()
   }
+}
+
+/** 最大输出 Token 净化：清空/非法输入回退默认值，负数收敛到 0（0 = 不限制） */
+function onMaxTokensChange() {
+  const v = aiConfig.maxTokens
+  if (!Number.isFinite(v)) {
+    aiConfig.maxTokens = DEFAULT_AI_CONFIG.maxTokens
+  } else if (v < 0) {
+    aiConfig.maxTokens = 0
+  }
+  onFieldChange()
 }
 
 /** 是否有未保存的更改 */
@@ -397,12 +416,13 @@ function handleToggle(id: string, enabled: boolean) {
             <label class="ai-field">
               <span class="ai-label">模型</span>
               <select
-                v-if="platformModels.length && modelInList && !isCustomModel"
-                :value="aiConfig.model"
+                v-if="platformModels.length"
+                :value="isCustomModel ? '__custom__' : modelInList ? aiConfig.model : '__back__'"
                 class="ai-select"
                 @change="onModelSelect(($event.target as HTMLSelectElement).value)"
               >
                 <option v-for="m in platformModels" :key="m" :value="m">{{ m }}</option>
+                <option v-if="!modelInList" value="__back__" disabled>↩ 当前为自定义模型，选择上方任一推荐模型可切回</option>
                 <option value="__custom__">✎ 自定义输入…</option>
               </select>
               <input
@@ -413,6 +433,7 @@ function handleToggle(id: string, enabled: boolean) {
                 placeholder="gpt-4o-mini"
                 @change="onFieldChange"
               />
+              <span v-if="isCustomModel" class="ai-hint">从上方下拉框选择任一推荐模型即可退出自定义输入</span>
             </label>
 
             <!-- Temperature -->
@@ -469,7 +490,7 @@ function handleToggle(id: string, enabled: boolean) {
                 min="0"
                 max="128000"
                 step="256"
-                @change="onFieldChange"
+                @change="onMaxTokensChange"
               />
               <span class="ai-hint">设为 0 表示不限制输出长度</span>
             </label>
