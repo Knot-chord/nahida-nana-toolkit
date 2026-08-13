@@ -80,6 +80,66 @@ pub fn get_file_size(path: String) -> Result<FileSizeResult, String> {
     })
 }
 
+/// 支持批量导入的文档扩展名（与前端 FORMAT_MAP 保持同源）
+const SUPPORTED_DOC_EXTS: &[&str] = &["md", "markdown", "txt", "html", "htm", "docx", "pdf"];
+
+/// 目录扫描上限：防止误选超大目录（如整个磁盘）时卡死
+const COLLECT_FILE_CAP: usize = 500;
+const COLLECT_DEPTH_CAP: usize = 8;
+
+/// Tauri 命令：收集路径下的支持格式文档（目录批量导入）
+///
+/// - 传入文件：扩展名受支持则返回它本身，否则返回空
+/// - 传入目录：递归（深度 ≤8）收集受支持文档，上限 500 个，按路径排序
+#[command]
+pub fn collect_supported_files(path: String) -> Result<Vec<String>, String> {
+    let root = Path::new(&path);
+    if !root.exists() {
+        return Err("路径不存在".to_string());
+    }
+
+    let mut result: Vec<String> = Vec::new();
+
+    if root.is_file() {
+        if is_supported_doc(root) {
+            result.push(path);
+        }
+        return Ok(result);
+    }
+
+    collect_dir_recursive(root, 0, &mut result);
+    result.sort();
+    Ok(result)
+}
+
+fn is_supported_doc(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| SUPPORTED_DOC_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+fn collect_dir_recursive(dir: &Path, depth: usize, out: &mut Vec<String>) {
+    if depth > COLLECT_DEPTH_CAP || out.len() >= COLLECT_FILE_CAP {
+        return;
+    }
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return, // 无权限等错误：静默跳过，不打断整体扫描
+    };
+    for entry in entries.flatten() {
+        if out.len() >= COLLECT_FILE_CAP {
+            return;
+        }
+        let p = entry.path();
+        if p.is_dir() {
+            collect_dir_recursive(&p, depth + 1, out);
+        } else if is_supported_doc(&p) {
+            out.push(p.to_string_lossy().to_string());
+        }
+    }
+}
+
 /// Tauri 命令：保存拖拽上传的文件到临时目录
 #[command]
 pub fn save_dropped_file(filename: String, data: Vec<u8>) -> Result<SaveFileResult, String> {

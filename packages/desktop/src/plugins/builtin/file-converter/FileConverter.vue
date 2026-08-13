@@ -159,6 +159,14 @@ function onBatchFormatChange(val: string | null) {
 /** 是否有待转换文件 */
 const hasFiles = computed(() => files.value.length > 0)
 
+/** 「开始转换」禁用原因（空串 = 可点击），悬停按钮可见，避免用户不知为何点不了 */
+const startDisabledReason = computed(() => {
+  if (!hasFiles.value) return '先添加待转换文件'
+  if (!outputDir.value) return '先选择输出目录'
+  if (files.value.some(f => !f.targetExt)) return '还有文件未选择目标格式'
+  return ''
+})
+
 /** 批量格式选项：所有文件源格式的并集目标（不兼容的文件在 onBatchFormatChange 中自动跳过） */
 const batchOptions = computed(() => {
   if (files.value.length === 0) return []
@@ -300,18 +308,44 @@ onUnmounted(() => {
   if (_windowLeaveHandler) document.removeEventListener('mouseleave', _windowLeaveHandler)
 })
 
-/** 处理拖拽添加的文件（直接拿到路径，无需读内容） */
+/** 处理拖拽添加的内容（文件直接导入；文件夹经后端展开收集支持文档） */
 async function addDroppedFiles(paths: string[]) {
-  let added = 0
+  const filePaths: string[] = []
   const unsupported: string[] = []
+  for (const p of paths) {
+    const name = p.split(/[\\/]/).pop() || p
+    const ext = '.' + (name.split('.').pop() || '').toLowerCase()
+    if (SUPPORTED_EXTS.includes(ext)) {
+      filePaths.push(p)
+      continue
+    }
+    // 非支持扩展：可能是文件夹，交给后端展开收集（内部有深度/数量上限）
+    try {
+      const collected = await invoke<string[]>('collect_supported_files', { path: p })
+      if (collected.length > 0) filePaths.push(...collected)
+      else unsupported.push(name)
+    } catch {
+      unsupported.push(name)
+    }
+  }
+
+  const added = await ingestPaths(filePaths)
+  if (added > 0) {
+    message.success(`已导入 ${added} 个文件~`)
+  }
+  if (unsupported.length > 0) {
+    message.warning(`以下内容不支持：${unsupported.slice(0, 3).join(', ')}${unsupported.length > 3 ? ` 等 ${unsupported.length} 个` : ''}`)
+  }
+}
+
+/** 统一导入口：同路径去重（完成/失败条目允许重转），返回实际新增数 */
+async function ingestPaths(paths: string[]): Promise<number> {
+  let added = 0
   for (const filePath of paths) {
     const name = filePath.split(/[\\/]/).pop() || filePath
     const ext = '.' + (name.split('.').pop() || '').toLowerCase()
+    if (!SUPPORTED_EXTS.includes(ext)) continue
 
-    if (!SUPPORTED_EXTS.includes(ext)) {
-      unsupported.push(name)
-      continue
-    }
     // 如果同路径文件已完成/失败，替换为新条目（允许重新转换）
     const existIdx = files.value.findIndex(f => f.path === filePath)
     if (existIdx !== -1) {
@@ -344,13 +378,7 @@ async function addDroppedFiles(paths: string[]) {
     })
     added++
   }
-
-  if (added > 0) {
-    message.success(`已拖入 ${added} 个文件~`)
-  }
-  if (unsupported.length > 0) {
-    message.warning(`以下文件格式不支持：${unsupported.slice(0, 3).join(', ')}${unsupported.length > 3 ? ` 等 ${unsupported.length} 个` : ''}`)
-  }
+  return added
 }
 
 /** 批量添加文件（通过对话框） */
@@ -366,58 +394,24 @@ async function addFilesDialog() {
       ],
     })
     if (!selected || (Array.isArray(selected) && selected.length === 0)) return
-
     const paths = Array.isArray(selected) ? selected : [selected]
-    let added = 0
-    const unsupported: string[] = []
-    for (const filePath of paths) {
-      const name = filePath.split(/[\\/]/).pop() || filePath
-      const ext = '.' + (name.split('.').pop() || '').toLowerCase()
-
-      if (!SUPPORTED_EXTS.includes(ext)) {
-        unsupported.push(name)
-        continue
-      }
-      // 如果同路径文件已完成/失败，替换为新条目（允许重新转换）
-      const existIdx = files.value.findIndex(f => f.path === filePath)
-      if (existIdx !== -1) {
-        const st = files.value[existIdx].status
-        if (st === 'done' || st === 'error') {
-          files.value.splice(existIdx, 1)
-        } else {
-          continue
-        }
-      }
-
-      // 获取文件大小
-      let size = 0
-      try {
-        const stat = await invoke<{ size: number }>('get_file_size', { path: filePath })
-        size = stat.size
-      } catch {
-        // 忽略错误，大小为 0
-      }
-
-      files.value.push({
-        id: uid(),
-        name,
-        path: filePath,
-        ext,
-        status: 'pending',
-        message: '',
-        size,
-        targetExt: getTargetsForExt(ext)[0]?.value || '',
-      })
-      added++
-    }
+    const added = await ingestPaths(paths)
     if (added > 0) {
       message.success(`已添加 ${added} 个文件~`)
     }
-    if (unsupported.length > 0) {
-      message.warning(`以下文件格式不支持：${unsupported.slice(0, 3).join(', ')}${unsupported.length > 3 ? ` 等 ${unsupported.length} 个` : ''}`)
-    }
   } catch (e) {
     message.error(`选择文件失败: ${e}`)
+  }
+}
+
+/** 选择文件夹批量导入（后端递归收集受支持文档，深度/数量有上限） */
+async function addFolderDialog() {
+  try {
+    const selected = await openDialog({ directory: true })
+    if (!selected || typeof selected !== 'string') return
+    await addDroppedFiles([selected])
+  } catch (e) {
+    message.error(`选择文件夹失败: ${e}`)
   }
 }
 
@@ -616,7 +610,7 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
       </div>
       <div class="drop-zone-text">
         <span v-if="isDragging">松开鼠标即可导入文件~</span>
-        <span v-else>拖拽文件到此处，或点击选择文件</span>
+        <span v-else>拖拽文件或文件夹到此处，或点击选择文件 · <span class="import-folder-link" @click.stop="addFolderDialog">导入文件夹</span></span>
       </div>
       <div class="drop-zone-formats">
         <NTag v-for="item in uniqueFormatLabels" :key="item.key" size="tiny" round :bordered="false" class="format-tag">
@@ -651,7 +645,8 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
           type="primary"
           size="small"
           @click="startConvert"
-          :disabled="!hasFiles || converting || !outputDir || files.some(f => !f.targetExt)"
+          :disabled="!!startDisabledReason || converting"
+          :title="startDisabledReason || '开始批量转换'"
         >
           ▶ 开始转换
         </NButton>
@@ -878,6 +873,15 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
   font-size: 0.95rem;
   color: var(--text-primary, #333);
   font-weight: 500;
+}
+
+.import-folder-link {
+  color: #78b868;
+  cursor: pointer;
+}
+
+.import-folder-link:hover {
+  text-decoration: underline;
 }
 
 .drop-zone-formats {
