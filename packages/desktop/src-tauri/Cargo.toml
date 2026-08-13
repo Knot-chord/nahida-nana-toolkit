@@ -1,6 +1,6 @@
 [package]
 name = "nahida-nana-toolkit"
-version = "0.1.0"
+version = "0.1.1"
 description = "A user-programmable local toolkit platform"
 authors = ["nahida-nana"]
 edition = "2021"
