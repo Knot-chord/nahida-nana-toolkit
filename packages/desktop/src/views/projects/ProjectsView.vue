@@ -104,8 +104,7 @@ onMounted(async () => {
           <span class="card-title">{{ project.title }}</span>
         </template>
         <template #header-extra>
-          <NTag v-if="!project.url" type="default" size="small">待填充</NTag>
-          <NTag v-else :type="typeColor(project.type)" size="small">
+          <NTag :type="typeColor(project.type)" size="small">
             {{ project.type }}
           </NTag>
         </template>

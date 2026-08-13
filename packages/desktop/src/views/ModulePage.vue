@@ -81,10 +81,13 @@ const moduleInfo = computed(() => {
       <NResult v-else status="info" title="游戏不存在" description="这个游戏还没开发哦~" />
     </div>
 
-    <!-- 工具工坊：工具列表 -->
+    <!-- 工具工坊：工具列表（头部范式与展柜/收藏等模块对齐：标题 + 介绍） -->
     <div v-else-if="moduleId === 'tools' && !toolId" class="tools-list">
-      <h2 class="module-title">🔧 工具工坊</h2>
-      <NSpace :size="12" style="padding: 0 2rem; flex-wrap: wrap">
+      <div class="tools-header">
+        <h2 class="page-title">🔧 工具工坊</h2>
+        <p class="page-desc">你的工具你来决定——想装什么就装什么，每个工具都是独立插件~</p>
+      </div>
+      <NSpace :size="12" style="flex-wrap: wrap">
         <NCard
           class="tool-card"
           hoverable
@@ -94,7 +97,7 @@ const moduleInfo = computed(() => {
             <span class="tool-icon">📄</span>
             <div>
               <div class="tool-name">文件格式转换</div>
-              <div class="tool-desc">Markdown / 纯文本 / HTML / Word 互转，支持拖拽导入~</div>
+              <div class="tool-desc">Markdown / 纯文本 / HTML / Word / PDF 五格式互转，支持拖拽导入~</div>
             </div>
           </div>
         </NCard>
@@ -134,24 +137,44 @@ const moduleInfo = computed(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0 2rem 0.5rem;
+  /* 底部留白对齐全站 header 标准（与其他模块 margin-bottom: 1rem 一致） */
+  padding: 0 2rem 1rem;
 }
 
+/* 详情页标题与其他模块 page-title 同规格（1.25rem/600），
+   返回行即标题行，不再形成两层头部 */
 .detail-name {
-  font-size: 1rem;
+  font-size: 1.25rem;
   font-weight: 600;
 }
 
+/* 顶部留白统一为全站标准 1.5rem（与终端/控制台/展柜等模块对齐），
+   内部组件不再叠加额外顶部边距，避免“整体靠下” */
 .game-detail,
 .tool-detail {
-  padding: 1rem 0;
+  padding: 1.5rem 0 0;
 }
 
-.tools-list .module-title {
+/* 工具列表：顶部/横向留白与标题、介绍规格全部对齐全站标准
+   （与项目展柜/兴趣收藏等模块同一范式） */
+.tools-list {
+  padding: 1.5rem 2rem;
+}
+
+.tools-header {
   margin-bottom: 1rem;
-  font-size: 1.375rem;
+}
+
+.tools-list .page-title {
+  font-size: 1.25rem;
   font-weight: 600;
-  padding: 1.5rem 2rem 0;
+  margin: 0 0 0.25rem;
+}
+
+.tools-list .page-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
 }
 
 .tool-card {
@@ -191,7 +214,7 @@ const moduleInfo = computed(() => {
 
 .module-placeholder .module-title {
   margin-bottom: 1.5rem;
-  font-size: 1.375rem;
+  font-size: 1.25rem;
   font-weight: 600;
   text-align: center;
   padding-top: 6vh;

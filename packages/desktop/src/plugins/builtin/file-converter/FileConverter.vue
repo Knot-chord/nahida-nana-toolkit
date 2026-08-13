@@ -830,7 +830,8 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
 </style>
 <style scoped>
 .file-converter {
-  padding: 2.5rem 2rem 2rem;
+  /* 顶部边距由外层 detail-header 统一控制（全站标准 1.5rem），不叠加额外顶部留白 */
+  padding: 0 2rem 2rem;
   max-width: 56rem;
   box-sizing: border-box;
 }
@@ -839,7 +840,8 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
 .drop-zone {
   border: 2px dashed var(--border-color, #d9d9d9);
   border-radius: 0.75rem;
-  padding: 2.5rem 1rem;
+  /* 内部留白收紧：旧值 2.5rem 使首个可视元素明显深于其他模块内容 */
+  padding: 1.75rem 1rem;
   text-align: center;
   cursor: pointer;
   transition: all 0.25s ease;

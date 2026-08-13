@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NLayout, NLayoutSider, NLayoutContent, NMessageProvider, NDialogProvider } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutContent, NMessageProvider, NDialogProvider, NConfigProvider, type GlobalThemeOverrides } from 'naive-ui'
 import PluginNav from './components/PluginNav.vue'
 import SidebarFooter from './components/SidebarFooter.vue'
 import { startSystemMonitor } from './services/use-system-monitor'
@@ -17,9 +17,16 @@ settingsStore.resolveDefaultSkillsDir().then(() => {
   const dir = settingsStore.skillsRootDir
   if (dir) scanSkills(dir)
 })
+
+// 全站主题覆写：NCard 默认圆角 3px 偏硬朗，统一调到 10px，
+// 与纸面底色 + 微影的整体柔和感同源（各模块卡片均为 NCard，一处生效）
+const themeOverrides: GlobalThemeOverrides = {
+  Card: { borderRadius: '10px' },
+}
 </script>
 
 <template>
+  <NConfigProvider :theme-overrides="themeOverrides">
   <NMessageProvider>
     <NDialogProvider>
       <NLayout has-sider class="app-layout">
@@ -63,6 +70,7 @@ settingsStore.resolveDefaultSkillsDir().then(() => {
       </NLayout>
     </NDialogProvider>
   </NMessageProvider>
+  </NConfigProvider>
 </template>
 
 <style>
@@ -71,11 +79,11 @@ settingsStore.resolveDefaultSkillsDir().then(() => {
  * 当前阶段：使用 Naive UI 默认主题，配色留到 UI 打磨层
  * ======================================== */
 
-/* ── 设计变量（后续深色模式时集中替换） ── */
+/* ── 设计变量（后续深色模式时集中替换；中性色全部带极淡暖调，与纸面底色同源） ── */
 :root {
   --bg-color: #ffffff;
-  --border-color: #e0e0e0;
-  --text-muted: #999;
+  --border-color: #e9e8e2;
+  --text-muted: #9a998f;
   --text-secondary: #666;
   --text-body: #555;
   --text-primary: #333;
@@ -128,7 +136,8 @@ body {
   padding: 1.125rem 1rem 0.875rem;
   display: flex;
   align-items: center;
-  justify-content: center;
+  /* 左对齐：与下方导航项同一视觉纵列，整条侧边栏读起来更协调 */
+  justify-content: flex-start;
   gap: 0.5rem;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
@@ -159,6 +168,10 @@ body {
 
 .content-area {
   padding: 0;
+  /* 暖白纸面底色（纳西妲配色规范底色 #fafaf8，呼应白色花苞裙）：
+     纯色而非渐变——高级感来自克制，纸面质感交给内容与留白。
+     与侧边栏纯白形成极微弱的层次分离，无装饰图形，性能零开销 */
+  background: #fafaf8;
 }
 
 /* 路由过渡容器：继承内容区高度，保证 height:100% 页面（如虚空终端）布局不被破坏 */

@@ -530,6 +530,8 @@ const gpuPercent = computed(() => {
         <h2 class="page-title">💭 虚空终端</h2>
       </div>
       <div class="header-right">
+        <!-- 主机名实时来自系统监控（useSystemMonitor 每轮刷新，无硬编码）；
+             暖绿配色 + 呼吸小圆点传达“连接中”的生命感，不用文字说明 -->
         <span class="hostname-tag">{{ info.hostname }}</span>
       </div>
     </div>
@@ -837,7 +839,8 @@ const gpuPercent = computed(() => {
 
 .page-title {
   font-size: 1.25rem;
-  font-weight: 700;
+  /* 字重与全站其他模块标题统一（600），避免跨页切换时标题粗细跳变 */
+  font-weight: 600;
   margin: 0;
 }
 
@@ -847,12 +850,45 @@ const gpuPercent = computed(() => {
   flex-shrink: 0;
 }
 
+/* 主机名标签：暖绿胶囊 + 呼吸圆点，传达“设备在线、监控流动中”的生命感。
+   数据实时来自 get_system_info（每 2~4s 一轮），无需任何文案标注 */
 .hostname-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
   font-size: 0.75rem;
-  color: var(--text-muted);
-  background: var(--hover-bg);
-  padding: 0.125rem 0.5rem;
-  border-radius: 4px;
+  color: #62a050;
+  background: rgba(120, 184, 104, 0.10);
+  border: 1px solid rgba(120, 184, 104, 0.28);
+  padding: 0.125rem 0.625rem;
+  border-radius: 999px;
+}
+
+/* 呼吸圆点：只动 opacity（合成层），6px 元素开销可忽略 */
+.hostname-tag::before {
+  content: '';
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #78b868;
+  animation: hostname-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes hostname-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hostname-tag::before {
+    animation: none;
+  }
 }
 
 /* ── 主体 ── */
@@ -910,9 +946,15 @@ const gpuPercent = computed(() => {
   50% { transform: scale(1.06); }
 }
 
+/* 呼吸圆环：固定正方形尺寸 + translate 居中，保证永远是正圆
+   （旧方案 inset 跟随 emoji 字形盒，宽高不等导致椭圆） */
 .ai-icon-ring {
   position: absolute;
-  inset: -6px;
+  top: 50%;
+  left: 50%;
+  width: 4.75rem;
+  height: 4.75rem;
+  margin: -2.375rem 0 0 -2.375rem;
   border-radius: 50%;
   border: 2px solid rgba(120, 184, 104, 0.25);
   animation: ring-pulse 3s ease-in-out infinite;
@@ -926,6 +968,7 @@ const gpuPercent = computed(() => {
 .ai-title {
   font-size: 1.25rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
   margin: 0 0 0.5rem;
   color: var(--text-primary);
 }
@@ -938,6 +981,8 @@ const gpuPercent = computed(() => {
   max-width: 20rem;
 }
 
+/* 假输入框：白底卡片浮在暖白纸面上（光源在上方，影子极淡），
+   hover 时绿色光圈提示可点——克制的微交互，不喧宾夺主 */
 .ai-input-placeholder {
   display: inline-flex;
   align-items: center;
@@ -945,17 +990,18 @@ const gpuPercent = computed(() => {
   height: 2.25rem;
   box-sizing: border-box;
   padding: 0.5rem 1rem;
-  border: 1px solid rgba(128, 128, 128, 0.15);
-  border-radius: 8px;
-  background: var(--hover-bg);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(31, 41, 31, 0.04);
   margin-bottom: 1rem;
   cursor: pointer;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .ai-input-placeholder:hover {
-  border-color: #78b868;
-  box-shadow: 0 0 0 2px rgba(120, 184, 104, 0.15);
+  border-color: rgba(120, 184, 104, 0.45);
+  box-shadow: 0 0 0 3px rgba(120, 184, 104, 0.10);
 }
 
 .placeholder-text {
@@ -1062,10 +1108,13 @@ const gpuPercent = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
+  /* 圆角条目 + 左右内缩：选中态用背景色块表达，
+     替代旧 border-left 竖条（竖条与条目脱节、顶部断裂，观感廉价） */
+  margin: 0.125rem 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
   cursor: pointer;
   transition: background 0.15s;
-  border-left: 2px solid transparent;
 }
 
 .conv-item:hover {
@@ -1073,8 +1122,7 @@ const gpuPercent = computed(() => {
 }
 
 .conv-item--active {
-  background: rgba(120, 184, 104, 0.08);
-  border-left-color: #78b868;
+  background: rgba(120, 184, 104, 0.12);
 }
 
 .conv-item-title {
@@ -1187,13 +1235,15 @@ const gpuPercent = computed(() => {
 /* 对话下拉（已废弃，由侧边栏替代） */
 
 /* 头部小按钮 */
+/* 幽灵风图标按钮：无框无底色，hover 才浮现背景，
+   替代旧版“带框方盒子”观感 */
 .chat-header-btn {
   flex-shrink: 0;
   width: 1.5rem;
   height: 1.5rem;
-  border: 1px solid rgba(128, 128, 128, 0.12);
-  border-radius: 4px;
-  background: var(--bg-color);
+  border: none;
+  border-radius: 6px;
+  background: transparent;
   color: var(--text-muted);
   font-size: 1rem;
   line-height: 1;
@@ -1201,14 +1251,14 @@ const gpuPercent = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
   padding: 0;
   font-family: inherit;
 }
 
 .chat-header-btn:hover {
   color: #78b868;
-  border-color: #78b868;
+  background: rgba(120, 184, 104, 0.10);
 }
 
 .chat-messages {
@@ -1875,9 +1925,9 @@ const gpuPercent = computed(() => {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  border: 1px solid var(--border-color, #555);
-  background: var(--bg-secondary, #2a2a2a);
-  color: var(--text-muted, #999);
+  border: 1px solid #3a3a36;
+  background: #24261f;
+  color: #a8a89f;
   font-size: 0.875rem;
   cursor: pointer;
   opacity: 0.5;
@@ -1896,9 +1946,12 @@ const gpuPercent = computed(() => {
   align-items: center;
   justify-content: center;
 }
+/* 诊断面板为终端风深色浮层：全部使用显式深色色值，
+   不依赖全站亮色主题变量（旧方案变量未定义/主题色串入，
+   导致深色文字落在深色底上“与背景融合”） */
 .diag-panel {
-  background: var(--bg-primary, #1e1e1e);
-  border: 1px solid var(--border-color, #444);
+  background: #1e1e1c;
+  border: 1px solid #3a3a36;
   border-radius: 0.5rem;
   width: min(90vw, 700px);
   max-height: 80vh;
@@ -1911,19 +1964,20 @@ const gpuPercent = computed(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--border-color, #444);
+  border-bottom: 1px solid #3a3a36;
+  color: #e8e8e2;
 }
 .diag-header button {
-  background: var(--bg-secondary, #333);
-  border: 1px solid var(--border-color, #555);
+  background: #2a2a26;
+  border: 1px solid #44443e;
   border-radius: 0.25rem;
   padding: 0.2rem 0.5rem;
-  color: var(--text-primary, #ddd);
+  color: #d8d8d0;
   cursor: pointer;
   font-size: 0.75rem;
 }
 .diag-header button:hover {
-  background: var(--bg-tertiary, #444);
+  background: #38382f;
 }
 .diag-actions {
   display: flex;
@@ -1933,34 +1987,35 @@ const gpuPercent = computed(() => {
   padding: 0.75rem;
   margin: 0;
   overflow: auto;
-  font-family: 'Cascadia Code', 'Fira Code', monospace;
-  font-size: 0.7rem;
-  line-height: 1.5;
-  color: var(--text-primary, #ccc);
+  /* 等宽字体负责数字/JSON，中文回退到雅黑避免等宽字体渲染 CJK 发虚 */
+  font-family: 'Cascadia Code', Consolas, 'Microsoft YaHei', monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #c9c9c0;
 }
 .diag-empty {
-  color: var(--text-muted, #888);
+  color: #8f8f86;
 }
 .diag-line {
   display: flex;
   gap: 0.5rem;
   padding: 0.125rem 0;
-  border-bottom: 1px dashed var(--border-color, #333);
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
 }
 .diag-line:last-child {
   border-bottom: none;
 }
 .diag-time {
   flex: none;
-  color: var(--text-muted, #888);
+  color: #8f8f86;
 }
 .diag-cat {
   flex: none;
   width: 3.25rem;
   text-align: center;
   border-radius: 3px;
-  background: var(--hover-bg, #333);
-  color: var(--text-muted, #999);
+  background: rgba(255, 255, 255, 0.07);
+  color: #b5b5ac;
 }
 /* 分类着色：错误红 / 发送绿 / API 蓝 / 其余默认 */
 .cat-error .diag-cat {
@@ -1984,9 +2039,11 @@ const gpuPercent = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* 标签是每行主信息，亮度高于正文，在深色底上清晰可辨 */
+  color: #e4e4dc;
 }
 .diag-detail {
-  color: var(--text-muted, #999);
+  color: #a8a89f;
   word-break: break-all;
 }
 </style>

@@ -304,7 +304,8 @@ function tileText(v: number): string {
 .game-2048 {
   max-width: 28rem;
   margin: 0 auto;
-  padding: 1.5rem;
+  /* 顶部边距由外层 game-detail 统一控制（全站标准 1.5rem） */
+  padding: 0 1.5rem 1.5rem;
   user-select: none;
   outline: none;
 }

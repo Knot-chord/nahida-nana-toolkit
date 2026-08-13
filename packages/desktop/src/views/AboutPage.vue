@@ -26,7 +26,7 @@ const features = [
       <h1 class="hero-title">Nahida-nana 工具箱</h1>
       <p class="hero-desc">
         一个正在成长中的小工具箱。<br>
-        像纳西妲编织梦境一样，一点一点地把有趣的东西收集起来~
+        像一片小小的园圃，有趣的东西落进来，就在这里慢慢生根。
       </p>
       <div class="hero-tags">
         <NTag size="small" :bordered="false" type="success">超轻量</NTag>
@@ -84,7 +84,8 @@ const features = [
 
 <style scoped>
 .about-page {
-  padding: 2rem 2.5rem;
+  /* 顶部/横向留白对齐全站标准（1.5rem / 2rem） */
+  padding: 1.5rem 2rem;
   max-width: 48rem;
   margin: 0 auto;
 }
