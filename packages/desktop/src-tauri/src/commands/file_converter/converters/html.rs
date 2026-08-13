@@ -6,8 +6,10 @@
  * HTML→DOCX: 剥离标签后 docx-rs 构建（含图片嵌入）
  */
 
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufWriter, Write};
 use std::path::Path;
+
+use crate::commands::file_converter::text_io::read_text_flexible;
 
 use super::{
     RE_BLOCK_END, RE_BR, RE_ENTITY_AMP, RE_ENTITY_GT, RE_ENTITY_LT, RE_ENTITY_NBSP,
@@ -48,19 +50,12 @@ fn extract_img_attrs(tag: &str) -> (String, String) {
     (src, alt)
 }
 
-/// HTML → 纯文本（流式处理，支持大文件）
+/// HTML → 纯文本（剥离标签 + 解码实体；先读后写，读取失败不留孤儿目标文件）
 pub fn html_to_txt(src: &Path, dst: &Path) -> Result<u64, String> {
-    let src_file = std::fs::File::open(src).map_err(|e| format!("无法打开源文件: {}", e))?;
+    let mut content = read_text_flexible(src)?;
     let dst_file = std::fs::File::create(dst).map_err(|e| format!("无法创建目标文件: {}", e))?;
 
-    let mut reader = BufReader::new(src_file);
     let mut writer = BufWriter::new(dst_file);
-
-    // 读取全部内容以处理跨行标签
-    let mut content = String::new();
-    reader
-        .read_to_string(&mut content)
-        .map_err(|e| format!("读取失败: {}", e))?;
 
     // 移除 script 和 style 块
     content = RE_SCRIPT.replace_all(&content, "").to_string();
@@ -90,8 +85,7 @@ pub fn html_to_txt(src: &Path, dst: &Path) -> Result<u64, String> {
 
 /// HTML → Markdown（使用 html2md，DOM 解析）
 pub fn html_to_md(src: &Path, dst: &Path) -> Result<u64, String> {
-    let content = std::fs::read_to_string(src)
-        .map_err(|e| format!("无法读取源文件: {}", e))?;
+    let content = read_text_flexible(src)?;
 
     let mut md = html2md::parse_html(&content);
 
@@ -106,8 +100,7 @@ pub fn html_to_md(src: &Path, dst: &Path) -> Result<u64, String> {
 
 /// HTML → DOCX（剥离标签后 docx-rs 构建，含图片嵌入）
 pub fn html_to_docx(src: &Path, dst: &Path) -> Result<u64, String> {
-    let content = std::fs::read_to_string(src)
-        .map_err(|e| format!("无法读取源文件: {}", e))?;
+    let content = read_text_flexible(src)?;
     let base_dir = src.parent().unwrap_or(Path::new("."));
 
     // Step 1: 提取所有 <img> 标签，替换为 {IMG:n} 占位符

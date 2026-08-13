@@ -1,8 +1,8 @@
 /**
  * 文件格式转换 — 插件入口
  *
- * 工具工坊第一个工具。支持 md/txt/html 互转，
- * 大文件流式处理，批量转换 10+ 文件。
+ * 工具工坊第一个工具。md/txt/html/docx/pdf 五格式互转（20 条路径），
+ * Rust 原生 + Python 桥接双通道，目录批量导入、暂停/继续、并发自适应。
  */
 
 import type { PluginModule } from '@nahida-nana/shared'
@@ -12,8 +12,8 @@ const plugin: PluginModule = {
   manifest: {
     id: 'file-converter',
     name: '文件格式转换',
-    version: '0.1.0',
-    description: '文档格式互转，支持 Markdown、纯文本、HTML，批量转换~',
+    version: '0.1.2',
+    description: 'md/txt/html/docx/pdf 五格式互转，目录批量导入、暂停/继续、大文件自适应~',
     icon: '📄',
     category: '工具',
     enabledByDefault: true,

@@ -6,6 +6,8 @@
  * 数据持久化到 localStorage
  */
 
+import { ref } from 'vue'
+
 const STORAGE_KEY = 'interests-bookmarks'
 
 /** 收藏条目 */
@@ -21,6 +23,12 @@ export interface Bookmark {
   createdAt: number
 }
 
+/**
+ * 响应式书签计数：添加/删除时同步更新，跨组件实时共享
+ * （控制台模块一览等处直接读它，无需各自轮询 localStorage）
+ */
+export const bookmarksCount = ref(0)
+
 /** 读取所有收藏（按时间倒序） */
 export function loadBookmarks(): Bookmark[] {
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -32,6 +40,9 @@ export function loadBookmarks(): Bookmark[] {
     return []
   }
 }
+
+// 初始同步一次（模块加载时 localStorage 已有数据）
+bookmarksCount.value = loadBookmarks().length
 
 /** 保存收藏列表 */
 function save(list: Bookmark[]): void {
@@ -48,6 +59,7 @@ export function addBookmark(item: Omit<Bookmark, 'id' | 'createdAt'>): Bookmark 
   }
   list.push(bookmark)
   save(list)
+  bookmarksCount.value = list.length
   return bookmark
 }
 
@@ -55,4 +67,5 @@ export function addBookmark(item: Omit<Bookmark, 'id' | 'createdAt'>): Bookmark 
 export function removeBookmark(id: string): void {
   const list = loadBookmarks().filter((b) => b.id !== id)
   save(list)
+  bookmarksCount.value = list.length
 }

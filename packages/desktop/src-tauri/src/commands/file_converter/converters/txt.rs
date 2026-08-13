@@ -6,17 +6,19 @@
  * TXT→DOCX: docx-rs 按行构建 Paragraph
  */
 
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufWriter, Cursor, Write};
 use std::path::Path;
+
+use crate::commands::file_converter::text_io::read_text_flexible;
 
 use super::html_escape;
 
-/// 纯文本 → HTML（流式处理，支持大文件）
+/// 纯文本 → HTML（逐行转义包裹；先读后写，读取失败不留孤儿目标文件）
 pub fn txt_to_html(src: &Path, dst: &Path) -> Result<u64, String> {
-    let src_file = std::fs::File::open(src).map_err(|e| format!("无法打开源文件: {}", e))?;
+    let content = read_text_flexible(src)?;
     let dst_file = std::fs::File::create(dst).map_err(|e| format!("无法创建目标文件: {}", e))?;
 
-    let reader = BufReader::new(src_file);
+    let reader = Cursor::new(content.as_bytes());
     let mut writer = BufWriter::new(dst_file);
 
     let title = src
@@ -45,9 +47,10 @@ pub fn txt_to_html(src: &Path, dst: &Path) -> Result<u64, String> {
     Ok(metadata.len())
 }
 
-/// 纯文本 → Markdown（直接复制，纯文本已是 Markdown 子集）
+/// 纯文本 → Markdown（编码自适应读取后统一以 UTF-8 写出，保证输出编码一致；内容为纯子集复制，无损）
 pub fn txt_to_md(src: &Path, dst: &Path) -> Result<u64, String> {
-    std::fs::copy(src, dst).map_err(|e| format!("复制失败: {}", e))?;
+    let content = read_text_flexible(src)?;
+    std::fs::write(dst, content.as_bytes()).map_err(|e| format!("写入失败: {}", e))?;
     let metadata = std::fs::metadata(dst).map_err(|e| format!("读取输出文件失败: {}", e))?;
     Ok(metadata.len())
 }
@@ -56,8 +59,7 @@ pub fn txt_to_md(src: &Path, dst: &Path) -> Result<u64, String> {
 pub fn txt_to_docx(src: &Path, dst: &Path) -> Result<u64, String> {
     use docx_rs::*;
 
-    let content = std::fs::read_to_string(src)
-        .map_err(|e| format!("无法读取源文件: {}", e))?;
+    let content = read_text_flexible(src)?;
 
     let mut doc = Docx::new();
     for line in content.lines() {

@@ -38,7 +38,7 @@ const WORKER_STACK_SIZE: usize = 16 * 1024 * 1024;
 
 /// 计算线程池大小：CPU 核心数的 3/4，限制在 [2, 16]
 /// 留 1/4 核心给 OS、Tauri 主线程和前端渲染
-fn compute_pool_size() -> usize {
+pub(crate) fn compute_pool_size() -> usize {
     let cpus = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);

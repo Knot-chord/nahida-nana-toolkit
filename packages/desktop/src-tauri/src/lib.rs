@@ -35,6 +35,7 @@ pub fn run() {
             file_converter::convert_file,
             file_converter::convert_content,
             file_converter::get_file_size,
+            file_converter::get_files_info,
             file_converter::collect_supported_files,
             file_converter::save_dropped_file,
             file_converter::extract_office_text,

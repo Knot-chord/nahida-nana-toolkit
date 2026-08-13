@@ -11,8 +11,9 @@
  */
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import {
@@ -33,7 +34,7 @@ interface FileItem {
   name: string
   path: string
   ext: string
-  status: 'pending' | 'converting' | 'done' | 'error'
+  status: 'pending' | 'converting' | 'done' | 'error' | 'skipped'
   message: string
   size: number
   /** 该文件的目标格式（逐文件自定义） */
@@ -127,6 +128,8 @@ const files = ref<FileItem[]>([])
 const outputDir = ref('')
 const converting = ref(false)
 const cancelRequested = ref(false)
+/** 暂停状态：worker 领取下一个任务前检查，已在跑的任务自然跑完 */
+const paused = ref(false)
 const progress = ref(0)
 const logs = ref<string[]>([])
 const isDragging = ref(false)
@@ -135,24 +138,49 @@ const batchFormat = ref('')
 /** 格式支持列表弹窗 */
 const showFormatModal = ref(false)
 
+/** 目录扫描载入状态（超大文件夹批量导入时实时反馈，避免“点了没反应”） */
+const scanning = ref(false)
+const scanScanned = ref(0)
+const scanFound = ref(0)
+
+/** 与后端 COLLECT_FILE_CAP 同源：达到上限时提示已截断 */
+const SCAN_FILE_CAP = 500
+
 /** 根据源扩展名获取可选目标格式 */
 function getTargetsForExt(ext: string): { label: string; value: string }[] {
   return FORMAT_MAP[ext.toLowerCase()]?.targets || []
 }
 
-/** 批量设置：将所有文件的目标格式统一为选定值，返回实际更新的数目 */
+/** 批量设置：将所有文件的目标格式统一为选定值，同格式文件标记忽略，返回实际更新的数目 */
 function onBatchFormatChange(val: string | null) {
   if (!val) return
   let updated = 0
+  let ignored = 0
   for (const f of files.value) {
+    // 同格式：转换无意义，直接标记忽略（不能保留旧目标，否则会被误转成其他格式）
+    if (f.ext === val) {
+      f.targetExt = f.ext
+      f.status = 'skipped'
+      f.message = '同格式，将忽略'
+      ignored++
+      continue
+    }
     const targets = getTargetsForExt(f.ext)
     if (targets.some(t => t.value === val)) {
       f.targetExt = val
+      if (f.status === 'skipped') {
+        f.status = 'pending'
+        f.message = ''
+      }
       updated++
     }
   }
-  if (updated < files.value.length) {
-    message.info(`已更新 ${updated}/${files.value.length} 个文件，${files.value.length - updated} 个不支持该格式已跳过`)
+  const untouched = files.value.length - updated - ignored
+  const parts = [`已更新 ${updated}/${files.value.length} 个文件`]
+  if (ignored > 0) parts.push(`${ignored} 个同格式将忽略`)
+  if (untouched > 0) parts.push(`${untouched} 个不支持该格式已跳过`)
+  if (ignored > 0 || untouched > 0) {
+    message.info(parts.join('，'))
   }
 }
 
@@ -162,7 +190,6 @@ const hasFiles = computed(() => files.value.length > 0)
 /** 「开始转换」禁用原因（空串 = 可点击），悬停按钮可见，避免用户不知为何点不了 */
 const startDisabledReason = computed(() => {
   if (!hasFiles.value) return '先添加待转换文件'
-  if (!outputDir.value) return '先选择输出目录'
   if (files.value.some(f => !f.targetExt)) return '还有文件未选择目标格式'
   return ''
 })
@@ -186,49 +213,38 @@ const batchOptions = computed(() => {
   return result
 })
 
-/** 总转换路径数（动态计算） */
-const totalConversionPaths = computed(() => {
-  return Object.values(FORMAT_MAP).reduce((sum, info) => sum + info.targets.length, 0)
-})
+/** 支持格式弹窗：五大格式（矩阵行列同源，code 作保真度键） */
+const matrixFormats = [
+  { code: 'md', name: 'Markdown', emoji: '📝', exts: '.md / .markdown' },
+  { code: 'txt', name: '纯文本', emoji: '📄', exts: '.txt' },
+  { code: 'html', name: 'HTML', emoji: '🌐', exts: '.html / .htm' },
+  { code: 'docx', name: 'Word', emoji: '📘', exts: '.docx' },
+  { code: 'pdf', name: 'PDF', emoji: '📕', exts: '.pdf' },
+]
 
-/** 格式支持详情列表（用于弹窗展示） */
-const formatSupportList = computed(() => {
-  // 源格式能提取图片的（TXT 是纯文本，没有图片）
-  const sourceHasImage: Record<string, boolean> = {
-    'Markdown': true,
-    'HTML': true,
-    'Word 文档': true,
-    'PDF 文档': true,
-    '纯文本': false,
-  }
-  // 目标格式能嵌入图片的
-  const targetCanEmbed = ['.docx', '.pdf']
+/**
+ * 无损路径白名单（按转换器实现实测）：
+ * - 纯文本为源：纯文本没有任何可丢失的内容，目标格式只是包装它
+ * - Markdown → HTML：comrak GFM 完整渲染，内容全量保留
+ * 其余路径均为有损：内容保留，排版/图片等细节随目标格式能力降级
+ */
+const LOSSLESS_PATHS = new Set([
+  'txt->md', 'txt->html', 'txt->docx', 'txt->pdf',
+  'md->html',
+])
 
-  const seen = new Set<string>()
-  const result: { label: string; exts: string; targets: { name: string; ext: string; image: boolean }[]; note: string }[] = []
-  for (const [, info] of Object.entries(FORMAT_MAP)) {
-    if (seen.has(info.label)) continue
-    seen.add(info.label)
-    const srcImg = sourceHasImage[info.label] ?? false
-    const targets = info.targets.map(t => ({
-      name: t.label.replace(/ \(.*\)/, ''),
-      ext: t.value,
-      // 源能提取 且 目标能嵌入 = 支持图片
-      image: srcImg && targetCanEmbed.includes(t.value),
-    }))
-    const exts = Object.entries(FORMAT_MAP)
-      .filter(([, v]) => v.label === info.label)
-      .map(([k]) => k)
-      .join(' / ')
-    let note = ''
-    if (info.label === '纯文本') note = '纯文本无图片'
-    else if (info.label === 'PDF 文档') note = '图片按文档流位置提取'
-    else if (info.label === 'Word 文档') note = '图片按段落位置嵌入'
-    else if (info.label === 'Markdown') note = '图片引用保留原始路径'
-    result.push({ label: info.label, exts, targets, note })
-  }
-  return result
-})
+/** 查转换保真度（对角线同格式由模板单独处理） */
+function fidelityOf(src: string, dst: string): 'lossless' | 'lossy' {
+  return LOSSLESS_PATHS.has(`${src}->${dst}`) ? 'lossless' : 'lossy'
+}
+
+/** 转换须知：格式特性决定的技术限制，如实标注 */
+const convertNotes = [
+  '有损是格式特性决定的正常现象：排版、字体、复杂表格等细节随目标格式能力变化',
+  '图片：Markdown / HTML → Word、PDF 时本地路径可解析即嵌入，否则以【图片】占位；Word、PDF → 其余格式以【图片】标记位置',
+  'PDF 相关路径需本机 Python 环境（PyMuPDF / pdf2docx 等，首次使用按提示安装）',
+  '扫描件 PDF 无 OCR 能力，转换结果可能为空',
+]
 
 /** 生成唯一 ID */
 function uid(): string {
@@ -319,11 +335,17 @@ async function addDroppedFiles(paths: string[]) {
       filePaths.push(p)
       continue
     }
-    // 非支持扩展：可能是文件夹，交给后端展开收集（内部有深度/数量上限）
+    // 非支持扩展：可能是文件夹，交给后端展开收集（内部有深度/数量上限，带进度事件）
     try {
-      const collected = await invoke<string[]>('collect_supported_files', { path: p })
-      if (collected.length > 0) filePaths.push(...collected)
-      else unsupported.push(name)
+      const collected = await collectWithProgress(p)
+      if (collected.length > 0) {
+        filePaths.push(...collected)
+        if (collected.length >= SCAN_FILE_CAP) {
+          message.warning(`目录过大，已按 ${SCAN_FILE_CAP} 个文件上限截断导入`)
+        }
+      } else {
+        unsupported.push(name)
+      }
     } catch {
       unsupported.push(name)
     }
@@ -331,54 +353,86 @@ async function addDroppedFiles(paths: string[]) {
 
   const added = await ingestPaths(filePaths)
   if (added > 0) {
-    message.success(`已导入 ${added} 个文件~`)
+    message.success(`导入成功：${added} 个文件，确认目标格式后点「开始转换」~`)
   }
   if (unsupported.length > 0) {
     message.warning(`以下内容不支持：${unsupported.slice(0, 3).join(', ')}${unsupported.length > 3 ? ` 等 ${unsupported.length} 个` : ''}`)
   }
 }
 
+/** 带进度反馈的目录扫描：监听后端节流推送的扫描进度事件 */
+async function collectWithProgress(path: string): Promise<string[]> {
+  scanning.value = true
+  scanScanned.value = 0
+  scanFound.value = 0
+  const unlisten = await listen<{ scanned: number; found: number }>(
+    'file-collect-progress',
+    (ev) => {
+      scanScanned.value = ev.payload.scanned
+      scanFound.value = ev.payload.found
+    }
+  )
+  try {
+    return await invoke<string[]>('collect_supported_files', { path })
+  } finally {
+    unlisten()
+    scanning.value = false
+  }
+}
+
 /** 统一导入口：同路径去重（完成/失败条目允许重转），返回实际新增数 */
 async function ingestPaths(paths: string[]): Promise<number> {
-  let added = 0
+  // 先做纯内存筛选：扩展名过滤 + 同路径去重，不发起任何 IPC
+  const fresh: string[] = []
   for (const filePath of paths) {
     const name = filePath.split(/[\\/]/).pop() || filePath
     const ext = '.' + (name.split('.').pop() || '').toLowerCase()
     if (!SUPPORTED_EXTS.includes(ext)) continue
 
-    // 如果同路径文件已完成/失败，替换为新条目（允许重新转换）
+    // 如果同路径文件已完成/失败/被忽略，替换为新条目（允许重新转换）
     const existIdx = files.value.findIndex(f => f.path === filePath)
     if (existIdx !== -1) {
       const st = files.value[existIdx].status
-      if (st === 'done' || st === 'error') {
+      if (st === 'done' || st === 'error' || st === 'skipped') {
         files.value.splice(existIdx, 1)
       } else {
         continue
       }
     }
+    fresh.push(filePath)
+  }
+  if (fresh.length === 0) return 0
 
-    // 获取文件大小
-    let size = 0
-    try {
-      const stat = await invoke<{ size: number }>('get_file_size', { path: filePath })
-      size = stat.size
-    } catch {
-      // 忽略错误，大小为 0
-    }
+  // 批量取大小：一次 IPC 替代逐文件 N 次往返（超大文件夹导入性能关键）
+  let sizeMap = new Map<string, number>()
+  try {
+    const stats = await invoke<{ path: string; size: number }[]>('get_files_info', { paths: fresh })
+    sizeMap = new Map(stats.map(s => [s.path, s.size]))
+  } catch {
+    // 失败回退为大小 0，不阻断导入
+  }
 
-    files.value.push({
+  // 先构建全部条目，再分片 push：避免数百张卡片一次性渲染冻住界面
+  const items: FileItem[] = fresh.map(filePath => {
+    const name = filePath.split(/[\\/]/).pop() || filePath
+    const ext = '.' + (name.split('.').pop() || '').toLowerCase()
+    return {
       id: uid(),
       name,
       path: filePath,
       ext,
       status: 'pending',
       message: '',
-      size,
+      size: sizeMap.get(filePath) || 0,
       targetExt: getTargetsForExt(ext)[0]?.value || '',
-    })
-    added++
+    }
+  })
+  const CHUNK = 40
+  for (let i = 0; i < items.length; i += CHUNK) {
+    files.value.push(...items.slice(i, i + CHUNK))
+    if (i + CHUNK < items.length) await nextTick()
   }
-  return added
+  return items.length
 }
 
 /** 批量添加文件（通过对话框） */
@@ -397,7 +451,7 @@ async function addFilesDialog() {
     const paths = Array.isArray(selected) ? selected : [selected]
     const added = await ingestPaths(paths)
     if (added > 0) {
-      message.success(`已添加 ${added} 个文件~`)
+      message.success(`导入成功：${added} 个文件，确认目标格式后点「开始转换」~`)
     }
   } catch (e) {
     message.error(`选择文件失败: ${e}`)
@@ -446,38 +500,54 @@ function addLog(msg: string) {
   logs.value.push(`[${time}] ${msg}`)
 }
 
-/** 开始转换 */
+/**
+ * 转换并发数：按本机 CPU 核数自动检测，充分利用多核优势
+ * 与后端转换引擎线程池同策略：取核数 3/4，留 1/4 给系统/界面，限幅 [2, 16]
+ */
+function computeConcurrency(): number {
+  const cpus = navigator.hardwareConcurrency || 4
+  return Math.min(16, Math.max(2, Math.floor((cpus * 3) / 4)))
+}
+const CONVERT_CONCURRENCY = computeConcurrency()
+
+/** 开始转换（唯一启动入口：仅按钮触发，导入/扫描完成后绝不自动开始） */
 async function startConvert() {
   if (!hasFiles.value) {
     message.warning('先添加文件再转换哦~')
     return
   }
   if (!outputDir.value) {
-    message.warning('请选择输出目录~')
+    // 兜底：未选输出目录时直接拉起选择，选完继续转换，避免“点了没反应”
+    await selectOutputDir()
+    if (!outputDir.value) return
+  }
+
+  // 全部同格式时无需转换，直接告知
+  if (!files.value.some(f => f.targetExt && f.targetExt !== f.ext)) {
+    message.info('全部文件都是同格式，无需转换~')
     return
   }
 
   converting.value = true
   cancelRequested.value = false
+  paused.value = false
   progress.value = 0
   logs.value = []
 
   const total = files.value.length
   let successCount = 0
   let failCount = 0
+  let skipCount = 0
+  let nextIdx = 0
+  let completed = 0
 
-  addLog(`开始转换，共 ${total} 个文件`)
+  addLog(`开始转换，共 ${total} 个文件（并发 ${Math.min(CONVERT_CONCURRENCY, total)} 路）`)
 
-  for (let i = 0; i < files.value.length; i++) {
-    if (cancelRequested.value) {
-      addLog('用户取消转换')
-      break
-    }
-
-    const file = files.value[i]
+  /** 转换单个文件（worker 循环领取队列） */
+  const convertOne = async (file: FileItem, order: number) => {
     file.status = 'converting'
     file.message = '转换中...'
-    addLog(`[${i + 1}/${total}] ${file.name}`)
+    addLog(`[${order}/${total}] ${file.name}`)
 
     const targetExt = file.targetExt
     if (!targetExt) {
@@ -485,18 +555,16 @@ async function startConvert() {
       file.message = '未选择目标格式'
       failCount++
       addLog(`  ✗ 未选择目标格式`)
-      progress.value = ((i + 1) / total) * 100
-      continue
+      return
     }
 
-    // 同格式跳过
+    // 同格式：转换无意义，中性忽略（不计入成败）
     if (targetExt === file.ext) {
-      file.status = 'error'
-      file.message = '源格式与目标格式相同'
-      failCount++
-      addLog(`  ✗ ${file.name} 源格式与目标格式相同，跳过`)
-      progress.value = ((i + 1) / total) * 100
-      continue
+      file.status = 'skipped'
+      file.message = '同格式，已忽略'
+      skipCount++
+      addLog(`  ⏭ ${file.name} 同格式转换无意义，已忽略`)
+      return
     }
 
     const baseName = file.name.replace(/\.[^.]+$/, '')
@@ -517,25 +585,58 @@ async function startConvert() {
         file.status = 'error'
         file.message = result.message
         failCount++
-        addLog(`  ✗ ${result.message}`)
+        addLog(`  ✗ ${file.name}: ${result.message}`)
       }
     } catch (e) {
       file.status = 'error'
       file.message = String(e)
       failCount++
-      addLog(`  ✗ 转换失败: ${e}`)
+      addLog(`  ✗ ${file.name} 转换失败: ${e}`)
     }
-
-    progress.value = ((i + 1) / total) * 100
   }
 
-  converting.value = false
-  addLog(`转换完成：成功 ${successCount}，失败 ${failCount}`)
+  /** 工作协程：不断从队列领取下一个文件，直到取完、被取消或暂停中 */
+  const worker = async () => {
+    for (;;) {
+      if (cancelRequested.value) return
+      await waitWhilePaused()
+      if (cancelRequested.value) return
+      const i = nextIdx++
+      if (i >= total) return
+      await convertOne(files.value[i], i + 1)
+      completed++
+      progress.value = (completed / total) * 100
+    }
+  }
 
-  if (failCount === 0) {
-    message.success(`全部转换成功！共 ${successCount} 个文件 ✨`)
-  } else {
-    message.warning(`转换完成，成功 ${successCount}，失败 ${failCount}`)
+  await Promise.all(
+    Array.from({ length: Math.min(CONVERT_CONCURRENCY, total) }, () => worker())
+  )
+
+  if (cancelRequested.value) {
+    addLog('用户取消转换')
+  }
+  converting.value = false
+  paused.value = false
+  addLog(`转换完成：成功 ${successCount}，失败 ${failCount}${skipCount > 0 ? `，忽略 ${skipCount}` : ''}`)
+
+  if (failCount === 0 && successCount > 0) {
+    message.success(`全部转换成功！共 ${successCount} 个文件 ✨${skipCount > 0 ? `（另忽略 ${skipCount} 个同格式）` : ''}`)
+  } else if (successCount + failCount > 0) {
+    message.warning(`转换完成，成功 ${successCount}，失败 ${failCount}${skipCount > 0 ? `，忽略 ${skipCount}` : ''}`)
+  }
+}
+
+/** 暂停 / 继续转换 */
+function togglePause() {
+  paused.value = !paused.value
+  addLog(paused.value ? '⏸ 已暂停（进行中的任务跑完后停止派新任务）' : '▶ 继续转换')
+}
+
+/** 暂停等待：worker 领取任务前调用，每 200ms 轮询，恢复或取消立即退出 */
+async function waitWhilePaused() {
+  while (paused.value && !cancelRequested.value) {
+    await new Promise(r => setTimeout(r, 200))
   }
 }
 
@@ -555,7 +656,7 @@ function formatSize(bytes: number): string {
 
 /** 状态标签类型 */
 function statusType(status: FileItem['status']): 'default' | 'info' | 'success' | 'error' | 'warning' {
-  const map = { pending: 'default', converting: 'info', done: 'success', error: 'error' } as const
+  const map = { pending: 'default', converting: 'info', done: 'success', error: 'error', skipped: 'default' } as const
   return map[status]
 }
 
@@ -610,7 +711,7 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
       </div>
       <div class="drop-zone-text">
         <span v-if="isDragging">松开鼠标即可导入文件~</span>
-        <span v-else>拖拽文件或文件夹到此处，或点击选择文件 · <span class="import-folder-link" @click.stop="addFolderDialog">导入文件夹</span></span>
+        <span v-else>拖拽文件或文件夹到此处，或点击选择文件</span>
       </div>
       <div class="drop-zone-formats">
         <NTag v-for="item in uniqueFormatLabels" :key="item.key" size="tiny" round :bordered="false" class="format-tag">
@@ -619,21 +720,32 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
       </div>
     </div>
 
-    <!-- 格式选择 + 操作栏 -->
+    <!-- 操作栏：左侧导入（输入）/ 右侧输出与转换 -->
     <div class="action-bar">
       <div class="action-left">
+        <NButton size="small" @click.stop="addFilesDialog" :disabled="scanning">
+          <span class="btn-icon">📄</span>选择文件
+        </NButton>
+        <NButton size="small" @click.stop="addFolderDialog" :disabled="scanning" title="批量导入文件夹内的受支持文档">
+          <span class="btn-icon">📂</span>选择文件夹
+        </NButton>
         <NButton size="small" @click.stop="clearFiles" :disabled="!hasFiles || converting">
           🗑 清空
-        </NButton>
-        <NButton size="small" @click.stop="selectOutputDir" class="dir-btn" :title="outputDir || '选择输出目录'">
-          <span style="opacity: 0.6; margin-right: 0.25rem">📁</span>
-          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 8rem; display: inline-block">
-            {{ outputDir ? outputDir.split(/[\\/]/).pop() : '选择目录' }}
-          </span>
         </NButton>
         <NButton text size="tiny" @click="showFormatModal = true" class="help-link-btn">📋 支持格式</NButton>
       </div>
       <div class="action-right">
+        <NButton size="small" @click.stop="selectOutputDir" class="dir-btn" :title="outputDir ? `输出到：${outputDir}` : '选择输出目录（转换结果保存到这里）'">
+          <span class="btn-icon">📤</span>
+          <span class="dir-btn-label">{{ outputDir ? outputDir.split(/[\\/]/).pop() : '输出到…' }}</span>
+        </NButton>
+        <NButton
+          v-if="converting"
+          size="small"
+          @click="togglePause"
+        >
+          {{ paused ? '▶ 继续' : '⏸ 暂停' }}
+        </NButton>
         <NButton
           v-if="converting"
           size="small"
@@ -651,6 +763,16 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
           ▶ 开始转换
         </NButton>
       </div>
+    </div>
+
+    <!-- 目录扫描载入条：超大文件夹批量导入时实时反馈扫描进度 -->
+    <div v-if="scanning" class="scan-progress">
+      <div class="scan-bar">
+        <div class="scan-bar-track"></div>
+      </div>
+      <NText depth="3" class="scan-text">
+        正在扫描目录…已发现 {{ scanFound }} 个文档（已扫描 {{ scanScanned }} 项）
+      </NText>
     </div>
 
     <!-- 批量格式设置 -->
@@ -678,7 +800,7 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
             <div class="file-info">
               <span class="file-name">{{ file.name }}</span>
               <NTag size="tiny" :type="statusType(file.status)" round>
-                {{ file.status === 'pending' ? '等待' : file.status === 'converting' ? '转换中' : file.status === 'done' ? '完成' : '失败' }}
+                {{ file.status === 'pending' ? '等待' : file.status === 'converting' ? '转换中' : file.status === 'done' ? '完成' : file.status === 'skipped' ? '已忽略' : '失败' }}
               </NTag>
             </div>
             <div class="file-meta">
@@ -754,39 +876,54 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
       style="max-width: 42rem; width: 92%"
       :segmented="{ content: true }"
     >
-      <table class="format-table">
+      <!-- 转换矩阵：行 = 源格式，列 = 目标格式，保真度分档一眼看清 -->
+      <table class="matrix-table">
         <thead>
           <tr>
-            <th>源格式</th>
-            <th>可转换为</th>
-            <th>说明</th>
+            <th class="matrix-corner">源 ↓ · 目标 →</th>
+            <th v-for="t in matrixFormats" :key="'h-' + t.code">
+              <div class="matrix-head">{{ t.emoji }} {{ t.name }}</div>
+              <div class="matrix-ext">{{ t.exts }}</div>
+            </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in formatSupportList" :key="item.label">
-            <td class="col-source">
-              <strong>{{ item.label }}</strong>
-              <span class="ext-hint">{{ item.exts }}</span>
+          <tr v-for="s in matrixFormats" :key="'r-' + s.code">
+            <td class="matrix-row-head">
+              <div class="matrix-head">{{ s.emoji }} {{ s.name }}</div>
+              <div class="matrix-ext">{{ s.exts }}</div>
             </td>
-            <td class="col-targets">
+            <td v-for="t in matrixFormats" :key="'c-' + s.code + '-' + t.code" class="matrix-cell">
+              <span v-if="s.code === t.code" class="matrix-same">—</span>
               <span
-                v-for="t in item.targets"
-                :key="t.ext"
-                class="target-chip"
-                :class="{ 'target-chip--img': t.image }"
-              >
-                <span class="chip-dot" :class="t.image ? 'dot--yes' : 'dot--no'"></span>
-                {{ t.name }}
-              </span>
+                v-else
+                class="matrix-dot"
+                :class="fidelityOf(s.code, t.code) === 'lossless' ? 'dot--lossless' : 'dot--lossy'"
+                :title="fidelityOf(s.code, t.code) === 'lossless' ? '无损：内容完整保留' : '有损：内容保留，排版/图片等细节降级'"
+              ></span>
             </td>
-            <td class="col-note">{{ item.note || '—' }}</td>
           </tr>
         </tbody>
       </table>
+
+      <!-- 保真度图例 -->
+      <div class="matrix-legend">
+        <span class="legend-item"><span class="matrix-dot dot--lossless"></span>无损：内容完整保留</span>
+        <span class="legend-item"><span class="matrix-dot dot--lossy"></span>有损：内容保留，排版/图片等细节降级</span>
+        <span class="legend-item"><span class="matrix-same">—</span>同格式无需转换</span>
+      </div>
+
+      <!-- 转换须知：只讲格式特性带来的技术限制 -->
+      <div class="convert-notes">
+        <div class="convert-notes-title">📌 转换须知</div>
+        <ul>
+          <li v-for="(note, i) in convertNotes" :key="i">{{ note }}</li>
+        </ul>
+      </div>
+
       <div class="format-table-footer">
-        <span class="chip-dot dot--yes" style="display:inline-block;vertical-align:middle;margin-right:2px"></span>
         <NText depth="3" style="font-size: 0.72rem">
-          = 支持图片嵌入 · 共 {{ formatSupportList.length }} 种源格式、{{ totalConversionPaths }} 条转换路径
+          {{ matrixFormats.length }} 种格式全互转 · {{ matrixFormats.length * (matrixFormats.length - 1) }} 条路径（{{ LOSSLESS_PATHS.size }} 无损 + {{ matrixFormats.length * (matrixFormats.length - 1) - LOSSLESS_PATHS.size }} 有损）
         </NText>
       </div>
     </NModal>
@@ -875,15 +1012,6 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
   font-weight: 500;
 }
 
-.import-folder-link {
-  color: #78b868;
-  cursor: pointer;
-}
-
-.import-folder-link:hover {
-  text-decoration: underline;
-}
-
 .drop-zone-formats {
   display: flex;
   flex-wrap: wrap;
@@ -938,6 +1066,19 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
   align-items: center;
 }
 
+.dir-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 8rem;
+  display: inline-block;
+}
+
+.btn-icon {
+  opacity: 0.6;
+  margin-right: 0.25rem;
+}
+
 /* ── 文件列表 ── */
 .file-list {
   display: flex;
@@ -987,9 +1128,9 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
 }
 
 .help-link-btn {
-  color: #999 !important;
+  color: #5a9a48 !important;
   font-size: 0.75rem !important;
-  border: 1px solid #ddd !important;
+  border: 1px solid rgba(120, 184, 104, 0.5) !important;
   border-radius: 0.25rem !important;
   padding: 0 0.4rem !important;
   height: 1.5rem !important;
@@ -999,8 +1140,9 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
 }
 
 .help-link-btn:hover {
-  color: #78b868 !important;
+  color: #3d7a30 !important;
   border-color: #78b868 !important;
+  background: rgba(120, 184, 104, 0.08) !important;
 }
 
 /* ── 文件列表卡片 ── */
@@ -1021,86 +1163,143 @@ function statusType(status: FileItem['status']): 'default' | 'info' | 'success' 
   overflow-y: auto;
 }
 
-/* ── 格式支持表格 ── */
-.format-table {
+/* ── 目录扫描载入条 ── */
+.scan-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.6rem;
+}
+
+.scan-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(120, 184, 104, 0.15);
+  overflow: hidden;
+}
+
+.scan-bar-track {
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: #78b868;
+  animation: scan-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes scan-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.scan-text {
+  font-size: 0.72rem;
+}
+
+/* ── 转换矩阵（支持格式弹窗） ── */
+.matrix-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82rem;
 }
 
-.format-table th {
-  text-align: left;
-  padding: 0.5rem 0.6rem;
-  font-weight: 600;
-  font-size: 0.75rem;
-  color: #666;
-  border-bottom: 2px solid rgba(120, 184, 104, 0.25);
-  white-space: nowrap;
-}
-
-.format-table td {
-  padding: 0.55rem 0.6rem;
+.matrix-table th,
+.matrix-table td {
+  padding: 0.5rem 0.35rem;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  text-align: center;
   vertical-align: middle;
 }
 
-.col-source {
+.matrix-table thead th {
+  border-bottom: 2px solid rgba(120, 184, 104, 0.25);
+}
+
+.matrix-corner {
+  font-size: 0.7rem;
+  color: #999;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.col-source strong {
-  color: #5a9a48;
+.matrix-row-head {
+  text-align: left !important;
+  white-space: nowrap;
 }
 
-.ext-hint {
-  display: block;
-  font-size: 0.68rem;
-  color: #999;
-  font-weight: normal;
-}
-
-.col-targets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.target-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.15rem 0.45rem;
-  border-radius: 0.25rem;
-  font-size: 0.76rem;
-  color: #555;
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.target-chip--img {
-  background: rgba(120, 184, 104, 0.1);
+.matrix-head {
+  font-weight: 600;
   color: #3d7a30;
+  font-size: 0.8rem;
 }
 
-.chip-dot {
-  width: 6px;
-  height: 6px;
+.matrix-table thead .matrix-head {
+  color: #555;
+}
+
+.matrix-ext {
+  font-size: 0.64rem;
+  color: #aaa;
+  font-weight: normal;
+  margin-top: 0.1rem;
+}
+
+.matrix-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
-  flex-shrink: 0;
 }
 
-.dot--yes {
+.dot--lossless {
+  background: #5b9bd5;
+}
+
+.dot--lossy {
   background: #78b868;
 }
 
-.dot--no {
-  background: #d0d0d0;
+.matrix-same {
+  color: #d5d5d5;
 }
 
-.col-note {
-  font-size: 0.7rem;
-  color: #888;
-  font-style: italic;
-  max-width: 10rem;
+.matrix-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  margin-top: 0.7rem;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  color: #777;
+}
+
+.convert-notes {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: rgba(120, 184, 104, 0.06);
+  border-radius: 0.5rem;
+}
+
+.convert-notes-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #3d7a30;
+  margin-bottom: 0.3rem;
+}
+
+.convert-notes ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.convert-notes li {
+  font-size: 0.72rem;
+  color: #777;
+  line-height: 1.7;
 }
 
 .format-table-footer {

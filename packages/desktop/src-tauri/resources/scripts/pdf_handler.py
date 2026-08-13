@@ -22,20 +22,106 @@ PDF 转换处理器 — 统一入口
 import sys
 import os
 
+# stdout/stderr 强制 UTF-8：Windows 默认 ANSI 代码页（中文系统为 GBK），
+# 而 Rust 侧按 UTF-8 解码子进程输出，不强制就会乱码（双保险，Rust 侧同时设 PYTHONIOENCODING）
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # ============================================================
-# 内存监控
+# 内存监控（上限由 main() 按文件体积 + 设备内存 + 并发数自适应计算）
 # ============================================================
 
+# 内存上限（MB）：默认 2GB，main() 中按源文件体积与设备实际内存自适应
+_MEMORY_LIMIT_MB = 2048.0
+
+
+def _compute_memory_limit(file_mb: float) -> float:
+    """计算内存上限（MB）：多重约束取最小 + 保底，绝不脱离设备实际内存
+
+    约束（取最小）：
+    1. 按文件体积的需求量：基础 2GB + 每 1MB 文件追加 8MB，封顶 12GB
+    2. Rust 侧按设备物理内存下发的每进程预算（环境变量 CONVERT_MEM_LIMIT_MB，
+       为物理内存 × 3/4 ÷ 并发数，保证多进程并发时不挤爆设备）
+    3. 环境变量缺失时兜底：psutil 探测物理内存 × 3/4
+    最后保底 512MB：小内存机器也至少能转小文件
+    """
+    need = min(12288.0, 2048.0 + file_mb * 8)
+
+    budget = None
+    budget_env = os.environ.get("CONVERT_MEM_LIMIT_MB")
+    if budget_env:
+        try:
+            budget = float(budget_env)
+        except ValueError:
+            budget = None
+    if budget is None:
+        try:
+            import psutil
+            budget = psutil.virtual_memory().total / 1024 / 1024 * 0.75
+        except Exception:
+            budget = None
+
+    limit = need if budget is None else min(need, budget)
+    return max(512.0, limit)
+
+
 def check_memory():
-    """检查当前进程内存，超过 200MB 抛出 MemoryError"""
+    """检查当前进程内存，超过自适应上限抛出 MemoryError"""
     try:
         import psutil
         process = psutil.Process(os.getpid())
         mem_mb = process.memory_info().rss / 1024 / 1024
-        if mem_mb > 200:
-            raise MemoryError(f"内存超限（{mem_mb:.0f}MB），请尝试处理更小的文件")
+        if mem_mb > _MEMORY_LIMIT_MB:
+            raise MemoryError(
+                f"内存超限（已用 {mem_mb:.0f}MB，上限 {_MEMORY_LIMIT_MB:.0f}MB）："
+                f"文件过大或内容过于复杂，请尝试拆分文件后重试"
+            )
     except ImportError:
         pass  # psutil 未安装则跳过检查
+
+
+def _read_text(path: str) -> str:
+    """读取文本文件：编码自适应（与 Rust 侧 text_io 同策略）
+
+    优先级：BOM 探测 → 无 BOM UTF-16 启发式 → UTF-8 → GB18030（GBK 超集）。
+    UTF-16 探测必须在 GB18030 之前，否则 GB18030 会把 UTF-16 静默解成乱码。
+    """
+    with open(path, "rb") as f:
+        raw = f.read()
+
+    # 1. BOM 探测
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return raw[3:].decode("utf-8")
+    if raw.startswith(b"\xff\xfe"):
+        return raw[2:].decode("utf-16-le")
+    if raw.startswith(b"\xfe\xff"):
+        return raw[2:].decode("utf-16-be")
+
+    # 2. 无 BOM UTF-16 启发式（ASCII 范围文本：隔字节为 0x00）
+    if len(raw) >= 4:
+        if raw[1] == 0x00 and raw[3] == 0x00:
+            return raw.decode("utf-16-le")
+        if raw[0] == 0x00 and raw[2] == 0x00:
+            return raw.decode("utf-16-be")
+
+    # 3. UTF-8 严格解码 → 4. GB18030 回退
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            return raw.decode("gb18030")
+        except UnicodeDecodeError:
+            raise RuntimeError(
+                "无法识别源文件编码：既非 UTF-8/UTF-16 也非 GB18030/GBK，请先将文件另存为 UTF-8 编码"
+            )
+
+
+def _xml_escape(text: str) -> str:
+    """转义 XML 特殊字符（reportlab Paragraph 按 XML 解析，裸 & / < 会导致生成失败）"""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _get_table_bboxes(page):
@@ -361,6 +447,12 @@ def pdf_to_docx(input_path: str, output_path: str):
     cv.convert(output_path)
     cv.close()
 
+    # pdf2docx 对无文字层 PDF 可能静默产出空文件，显式报错而非假成功
+    if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
+        raise RuntimeError(
+            "转换结果为空：源 PDF 可能没有可提取的文本内容（如扫描版/纯图片 PDF）"
+        )
+
 
 # ============================================================
 # 降级操作（超大文件仅提取纯文本）
@@ -501,7 +593,7 @@ def docx_to_pdf(input_path: str, output_path: str):
                     if cell_text:
                         cell_text += "\n"
                     cell_text += t
-                row.append(cell_text)
+                row.append(_xml_escape(cell_text))
             if row:
                 table_data.append(row)
         if not table_data:
@@ -531,7 +623,7 @@ def docx_to_pdf(input_path: str, output_path: str):
             text = para.text.strip()
             images = get_para_images(para)
 
-            # 添加文本
+            # 添加文本（转义 XML 特殊字符，防 reportlab 解析失败）
             if text:
                 style = normal_style
                 if para.style and para.style.name and para.style.name.startswith("Heading"):
@@ -540,7 +632,7 @@ def docx_to_pdf(input_path: str, output_path: str):
                         style = heading_styles.get(level, heading_styles[1])
                     except (ValueError, KeyError):
                         style = heading_styles[1]
-                story.append(Paragraph(text, style))
+                story.append(Paragraph(_xml_escape(text), style))
             elif not images:
                 story.append(Spacer(1, 6))
 
@@ -581,8 +673,7 @@ def md_to_pdf(input_path: str, output_path: str):
     except Exception:
         pass
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        md_content = f.read()
+    md_content = _read_text(input_path)
 
     html_body = md_lib.markdown(
         md_content,
@@ -615,7 +706,10 @@ def md_to_pdf(input_path: str, output_path: str):
     )
 
     with open(output_path, "wb") as f:
-        pisa.CreatePDF(full_html, dest=f, encoding="utf-8")
+        status = pisa.CreatePDF(full_html, dest=f, encoding="utf-8")
+    # xhtml2pdf 渲染失败时不抛异常只置 err，不检查就是假成功
+    if getattr(status, "err", 0):
+        raise RuntimeError("xhtml2pdf 渲染失败：Markdown 内容可能含有无法渲染的元素")
 
 
 def html_to_pdf(input_path: str, output_path: str):
@@ -630,11 +724,13 @@ def html_to_pdf(input_path: str, output_path: str):
     except Exception:
         pass
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
+    html_content = _read_text(input_path)
 
     with open(output_path, "wb") as f:
-        pisa.CreatePDF(html_content, dest=f, encoding="utf-8")
+        status = pisa.CreatePDF(html_content, dest=f, encoding="utf-8")
+    # xhtml2pdf 渲染失败时不抛异常只置 err，不检查就是假成功
+    if getattr(status, "err", 0):
+        raise RuntimeError("xhtml2pdf 渲染失败：HTML 内容可能含有无法渲染的元素")
 
 
 def txt_to_pdf(input_path: str, output_path: str):
@@ -657,8 +753,7 @@ def txt_to_pdf(input_path: str, output_path: str):
         except Exception:
             cjk_font = "Helvetica"
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        text = f.read()
+    text = _read_text(input_path)
 
     pdf_doc = SimpleDocTemplate(
         output_path, pagesize=A4,
@@ -677,7 +772,8 @@ def txt_to_pdf(input_path: str, output_path: str):
         if not line.strip():
             story.append(Spacer(1, 6))
         else:
-            story.append(Paragraph(line, normal_style))
+            # 转义 XML 特殊字符，防 reportlab 解析失败
+            story.append(Paragraph(_xml_escape(line), normal_style))
 
     pdf_doc.build(story)
 
@@ -701,6 +797,7 @@ OPERATIONS = {
 
 
 def main():
+    global _MEMORY_LIMIT_MB
     if len(sys.argv) != 4:
         print(
             f"用法: python {sys.argv[0]} <operation> <input_path> <output_path>",
@@ -722,10 +819,25 @@ def main():
         print(f"ERROR: 输入文件不存在: {input_path}", file=sys.stderr)
         sys.exit(1)
 
+    # 内存上限自适应：文件体积需求 / 设备物理内存预算 取最小，保底 512MB
+    try:
+        file_mb = os.path.getsize(input_path) / 1024 / 1024
+        _MEMORY_LIMIT_MB = _compute_memory_limit(file_mb)
+    except OSError:
+        pass
+
     try:
         OPERATIONS[operation](input_path, output_path)
         if os.path.isfile(output_path):
             size = os.path.getsize(output_path)
+            if size == 0:
+                # 空输出 = 转换实际失败（如扫描版 PDF 无文字层），必须报错而非假成功
+                print(
+                    "ERROR: 转换结果为空：源文件可能没有可提取的文本内容"
+                    "（如扫描版/纯图片 PDF），暂不支持 OCR 识别",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
             print(f"OK:{size}")
         else:
             print("ERROR: 输出文件未生成", file=sys.stderr)

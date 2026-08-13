@@ -11,11 +11,13 @@
  */
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { NCard, NTag, NTimeline, NTimelineItem, NButton, NSwitch } from 'naive-ui'
 import { getPlugins } from '../plugins/manager'
 import { getModuleVisibility, toggleModuleVisibility, type ModuleId } from '../utils/modules'
+import { fetchProjects } from '../data/projects'
+import { bookmarksCount } from '../data/interests'
 import type { PluginCategory } from '@nahida-nana/shared'
 
 const router = useRouter()
@@ -37,26 +39,47 @@ const feedColors = ['#2080f0', '#18a058', '#f0a020', '#e88030', '#d03050', '#803
 /** 模块可见性（响应式） */
 const moduleVisibility = getModuleVisibility()
 
-/** 按分类统计插件数量（响应式读取注册表） */
+/**
+ * 模块内容计数：各模块读自己的真实内容源，而非统一数插件
+ * - 项目展柜 = 作品数（data/projects）
+ * - 兴趣收藏 = 书签数（data/interests 的共享响应式计数，添加/删除实时更新）
+ * - 工具工坊 / 游戏小馆 = 插件数（注册表）
+ * 之前统一数插件导致项目展柜/兴趣收藏永远“空空的~”
+ */
+const projectsCount = ref(0)
+
+onMounted(async () => {
+  try {
+    projectsCount.value = (await fetchProjects()).length
+  } catch {
+    // 展柜数据拉取失败不影响控制台总览，保持 0
+  }
+})
+
+/** 按模块统计内容数量 */
 const moduleStats = computed(() => {
   const registry = getPlugins()
-  const categories: { id: string; name: string; icon: string; category: PluginCategory }[] = [
-    { id: 'projects', name: '项目展柜', icon: '📁', category: '项目' },
-    { id: 'tools', name: '工具工坊', icon: '🔧', category: '工具' },
-    { id: 'interests', name: '兴趣收藏', icon: '💡', category: '兴趣' },
-    { id: 'games', name: '游戏小馆', icon: '🎮', category: '游戏' },
-  ]
-  return categories.map((mod) => {
+  /** 插件分类计数（工具工坊/游戏小馆的内容就是插件本身） */
+  const pluginCount = (category: PluginCategory) => {
     let total = 0
     let enabled = 0
     for (const entry of Array.from(registry.values())) {
-      if (entry.module?.manifest.category === mod.category) {
+      if (entry.module?.manifest.category === category) {
         total++
         if (entry.state.enabled) enabled++
       }
     }
-    return { ...mod, total, enabled }
-  })
+    return { total, enabled }
+  }
+
+  const tools = pluginCount('工具')
+  const games = pluginCount('游戏')
+  return [
+    { id: 'projects', name: '项目展柜', icon: '📁', total: projectsCount.value, enabled: projectsCount.value },
+    { id: 'tools', name: '工具工坊', icon: '🔧', total: tools.total, enabled: tools.enabled },
+    { id: 'interests', name: '兴趣收藏', icon: '💡', total: bookmarksCount.value, enabled: bookmarksCount.value },
+    { id: 'games', name: '游戏小馆', icon: '🎮', total: games.total, enabled: games.enabled },
+  ]
 })
 
 /** 跳转到模块页面 */
@@ -72,13 +95,14 @@ function goToModule(moduleId: string) {
  */
 const feedItems: { type: 'success' | 'warning' | 'default'; title: string; content: string; date: string }[] = [
   // ── 已完成（完成时）──
+  { type: 'success', title: '【已完成】📄 文件转换大升级', content: '目录批量导入、暂停/继续、并发按核数自适应，大文件内存/超时按设备自适应，失败原因明白呈现', date: '08-13' },
   { type: 'success', title: '【已完成】🌱 v0.1.1 首个公开预览版', content: '正式开源上线 GitHub（MIT 协议），小苗破土，去看看外面的世界', date: '08-13' },
   { type: 'success', title: '【已完成】🎨 全站 UI 节奏统一', content: '布局留白、卡片圆角、标题层级全站同一标准，AI 配置模型参数可用性修复', date: '08-13' },
   { type: 'success', title: '【已完成】🎭 角色人格去内置化', content: '对话剥离全部纳西妲风格，人格经 Skills 常驻注入实现', date: '08-12' },
   { type: 'success', title: '【已完成】⚡ 性能全面优化', content: '监控启动即预采集、状态栏零等待、采集线程分离、模块平滑过渡', date: '08-12' },
   { type: 'success', title: '【已完成】📊 系统监控全量就位', content: 'CPU/内存/GPU 动态进度条，支持 Intel/AMD 显卡', date: '08-10' },
   { type: 'success', title: '【已完成】🧩 Skills 机制去内置化', content: '从文件系统加载，支持 JSON 导入与三级启用', date: '07-20' },
-  { type: 'success', title: '【已完成】📄 文件转换全格式覆盖', content: 'Markdown/HTML/Word/纯文本互转 + 原生拖拽', date: '07-10' },
+  { type: 'success', title: '【已完成】📄 文件转换全格式覆盖', content: 'Markdown/HTML/Word/纯文本/PDF 五格式互转 + 原生拖拽', date: '07-10' },
   { type: 'success', title: '【已完成】💭 虚空终端加入侧边栏', content: 'AI 统一入口就位，等待第 3 层唤醒', date: '06-25' },
   { type: 'success', title: '【已完成】🏗️ v0.1 地基搭建', content: '插件系统、界面骨架已就位', date: '06-20' },
 
@@ -145,7 +169,7 @@ const feedItems: { type: 'success' | 'warning' | 'default'; title: string; conte
             <div class="module-info">
               <span class="module-name">{{ mod.name }}</span>
               <NTag size="tiny" :bordered="false">
-                {{ mod.total === 0 ? '空空的~' : `${mod.enabled} / ${mod.total}` }}
+                {{ mod.total === 0 ? '空空的~' : `${mod.total} 个内容` }}
               </NTag>
             </div>
             <NSwitch

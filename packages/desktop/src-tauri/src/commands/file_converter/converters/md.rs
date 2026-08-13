@@ -6,8 +6,10 @@
  * MD→DOCX: md_to_docx_bytes() 构建（含图片嵌入）
  */
 
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufWriter, Cursor, Write};
 use std::path::Path;
+
+use crate::commands::file_converter::text_io::read_text_flexible;
 
 use super::{
     RE_BOLD, RE_BLOCKQUOTE, RE_CODE_FENCE, RE_HIGHLIGHT, RE_HR, RE_IMAGE,
@@ -145,12 +147,12 @@ fn build_docx_table(mut doc: Docx, rows: &[Vec<String>]) -> Docx {
 // 转换实现
 // ============================================================
 
-/// Markdown → 纯文本（流式逐行处理，支持大文件）
+/// Markdown → 纯文本（逐行剥离 MD 语法；先读后写，读取失败不留孤儿目标文件）
 pub fn md_to_txt(src: &Path, dst: &Path) -> Result<u64, String> {
-    let src_file = std::fs::File::open(src).map_err(|e| format!("无法打开源文件: {}", e))?;
+    let content = read_text_flexible(src)?;
     let dst_file = std::fs::File::create(dst).map_err(|e| format!("无法创建目标文件: {}", e))?;
 
-    let reader = BufReader::new(src_file);
+    let reader = Cursor::new(content.as_bytes());
     let mut writer = BufWriter::new(dst_file);
     let mut in_code_block = false;
 
@@ -196,8 +198,7 @@ pub fn md_to_txt(src: &Path, dst: &Path) -> Result<u64, String> {
 
 /// Markdown → HTML（使用 comrak，GFM 完整支持）
 pub fn md_to_html(src: &Path, dst: &Path) -> Result<u64, String> {
-    let content = std::fs::read_to_string(src)
-        .map_err(|e| format!("无法读取源文件: {}", e))?;
+    let content = read_text_flexible(src)?;
 
     let mut options = comrak::Options::default();
     options.extension.strikethrough = true;
@@ -418,8 +419,7 @@ pub fn md_to_docx_bytes(content: &str, base_dir: &Path) -> Result<Vec<u8>, Strin
 
 /// Markdown → DOCX（含图片嵌入）
 pub fn md_to_docx(src: &Path, dst: &Path) -> Result<u64, String> {
-    let content = std::fs::read_to_string(src)
-        .map_err(|e| format!("无法读取源文件: {}", e))?;
+    let content = read_text_flexible(src)?;
     let base_dir = src.parent().unwrap_or(Path::new("."));
     let bytes = md_to_docx_bytes(&content, base_dir)?;
     let written = bytes.len() as u64;
